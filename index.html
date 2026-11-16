@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#0e0716">
+<title>لوحة متقدمي Magmafy</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=El+Messiri:wght@600;700&family=Space+Grotesk:wght@500;700&family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* Layout idea: a work screen. Stats and filters on top, ranked table in the middle, detail drawer slides in from the side. */
+:root {
+  --bg: #0e0716;
+  --bg-2: #1a0f27;
+  --bg-3: #231433;
+  --text: #fff4fa;
+  --muted: #c7b6d6;
+  --faint: #8f7ea3;
+  --border: rgba(255, 210, 236, 0.12);
+  --border-strong: rgba(255, 196, 226, 0.3);
+  --pink: #d62976;
+  --yellow: #feda75;
+  --orange: #fa7e1e;
+  --violet: #962fbf;
+  --good: #4cd9a0;
+  --warn: #feda75;
+  --bad: #ff7a9c;
+  --grad-btn: linear-gradient(100deg, #fa7e1e 0%, #d62976 52%, #962fbf 100%);
+  --grad: linear-gradient(100deg, #feda75 0%, #fa7e1e 26%, #d62976 58%, #962fbf 84%, #4f5bd5 108%);
+  --f-display: 'Space Grotesk', 'El Messiri', 'Tajawal', system-ui, sans-serif;
+  --f-body: 'Tajawal', 'Space Grotesk', system-ui, -apple-system, 'Segoe UI', Tahoma, sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--f-body); font-size: 16px; line-height: 1.6; }
+button, input, select, textarea { font: inherit; color: inherit; }
+a { color: var(--yellow); }
+:focus-visible { outline: 2px solid var(--yellow); outline-offset: 2px; }
+.ltr { direction: ltr; unicode-bidi: embed; }
+
+.app { max-width: 1280px; margin: 0 auto; padding: 18px clamp(14px, 3vw, 32px) 60px; }
+.topbar { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; justify-content: space-between; padding-bottom: 16px; }
+.topbar h1 { font-family: var(--f-display); font-size: clamp(22px, 3vw, 30px); margin: 0; }
+.topbar h1 span { background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.topbar .actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.btn { background: var(--bg-3); border: 1px solid var(--border-strong); border-radius: 99px; padding: 8px 18px; cursor: pointer; text-decoration: none; color: var(--text); }
+.btn:hover { border-color: var(--pink); }
+.btn.primary { background: var(--grad-btn); border: 0; font-weight: 700; color: #fff; }
+.banner { border-radius: 14px; padding: 10px 16px; margin-bottom: 14px; border: 1px solid var(--border-strong); background: var(--bg-2); color: var(--muted); }
+.banner.demo { border-color: var(--yellow); color: var(--yellow); }
+.banner.error { border-color: var(--bad); color: var(--bad); }
+
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.stat { background: var(--bg-2); border: 1px solid var(--border); border-radius: 16px; padding: 14px 16px; }
+.stat b { display: block; font-family: var(--f-display); font-size: 28px; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.stat span { color: var(--faint); font-size: 14px; }
+
+.dist { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 16px; }
+.dist button { text-align: right; background: var(--bg-2); border: 1px solid var(--border); border-radius: 14px; padding: 10px 14px; cursor: pointer; }
+.dist button[aria-pressed=true] { border-color: var(--pink); background: rgba(214, 41, 118, 0.14); }
+.dist .bar { height: 6px; border-radius: 99px; background: var(--bg-3); margin-top: 8px; overflow: hidden; }
+.dist .bar i { display: block; height: 100%; border-radius: 99px; }
+.dist strong { font-variant-numeric: tabular-nums; }
+
+.filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; margin-bottom: 14px; }
+.filters label { display: grid; gap: 4px; font-size: 14px; color: var(--faint); }
+.filters input[type=search], .filters select { background: var(--bg-2); border: 1px solid var(--border-strong); border-radius: 12px; padding: 8px 12px; min-width: 150px; }
+.filters input[type=range] { accent-color: var(--pink); width: 150px; }
+
+.table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 16px; background: var(--bg-2); }
+table { width: 100%; border-collapse: collapse; min-width: 860px; }
+th, td { padding: 12px 14px; text-align: right; border-bottom: 1px solid var(--border); vertical-align: middle; }
+th { color: var(--faint); font-weight: 500; font-size: 14px; white-space: nowrap; }
+th button { background: none; border: 0; cursor: pointer; color: inherit; padding: 0; }
+tbody tr { cursor: pointer; }
+tbody tr:hover { background: rgba(255, 210, 236, 0.04); }
+tbody tr[aria-selected=true] { background: rgba(214, 41, 118, 0.12); }
+td.rank { color: var(--faint); width: 44px; font-variant-numeric: tabular-nums; }
+.score { display: grid; grid-template-columns: 34px 1fr; gap: 10px; align-items: center; min-width: 130px; }
+.score b { font-variant-numeric: tabular-nums; font-family: var(--f-display); }
+.meter { height: 7px; border-radius: 99px; background: var(--bg-3); overflow: hidden; }
+.meter i { display: block; height: 100%; border-radius: 99px; }
+.top { --c: var(--good); } .good { --c: #8fd96a; } .mid { --c: var(--warn); } .low { --c: var(--bad); }
+.meter i, .dist .bar i { background: var(--c, var(--pink)); }
+.pill { display: inline-block; border-radius: 99px; padding: 1px 10px; font-size: 13px; border: 1px solid currentColor; white-space: nowrap; }
+.pill.ok { color: var(--good); } .pill.miss { color: var(--bad); } .pill.warn { color: var(--warn); } .pill.neutral { color: var(--muted); }
+.band-top { color: var(--good); } .band-good { color: #8fd96a; } .band-mid { color: var(--warn); } .band-low { color: var(--bad); }
+.empty { padding: 40px 20px; text-align: center; color: var(--muted); }
+.small { font-size: 13px; color: var(--faint); }
+
+/* drawer */
+.drawer { position: fixed; inset-block: 0; inset-inline-start: 0; width: min(560px, 100%); background: var(--bg-2); border-inline-end: 1px solid var(--border-strong); box-shadow: 0 0 60px rgba(0, 0, 0, 0.6); overflow-y: auto; padding: 22px; transform: translateX(102%); transition: transform .25s ease; z-index: 20; }
+.drawer.open { transform: none; }
+.scrim { position: fixed; inset: 0; background: rgba(5, 2, 9, 0.6); opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 10; }
+.scrim.open { opacity: 1; pointer-events: auto; }
+.drawer h2 { font-family: var(--f-display); margin: 0 0 4px; font-size: 24px; }
+.drawer h3 { font-family: var(--f-display); font-size: 17px; margin: 22px 0 8px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+.drawer .close { position: absolute; inset-block-start: 14px; inset-inline-end: 14px; }
+.drawer .head-score { display: flex; align-items: center; gap: 14px; margin: 10px 0; }
+.drawer .big { font-family: var(--f-display); font-size: 44px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+.crit { display: grid; grid-template-columns: 150px 1fr 54px; gap: 10px; align-items: center; margin-bottom: 8px; }
+.crit .note { grid-column: 1 / -1; color: var(--faint); font-size: 13px; margin-top: -4px; }
+.crit span.pts { text-align: left; font-variant-numeric: tabular-nums; color: var(--muted); }
+.checklist { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.checklist li { display: flex; gap: 8px; align-items: baseline; }
+.answer { background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 10px 14px; margin-bottom: 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.answer b { display: block; color: var(--faint); font-weight: 500; font-size: 13px; }
+.row-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.drawer select, .drawer textarea { width: 100%; background: var(--bg); border: 1px solid var(--border-strong); border-radius: 12px; padding: 8px 12px; }
+.drawer textarea { min-height: 80px; }
+
+dialog { background: var(--bg-2); color: var(--text); border: 1px solid var(--border-strong); border-radius: 18px; padding: 22px; width: min(520px, 92vw); }
+dialog::backdrop { background: rgba(5, 2, 9, 0.7); }
+dialog h2 { margin: 0 0 12px; font-family: var(--f-display); font-size: 20px; }
+dialog label { display: grid; gap: 4px; margin-bottom: 12px; }
+dialog input { background: var(--bg); border: 1px solid var(--border-strong); border-radius: 12px; padding: 9px 12px; width: 100%; }
+dialog .row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+
+@media (max-width: 720px) { .dist { grid-template-columns: repeat(2, 1fr); } .crit { grid-template-columns: 1fr 1fr 48px; } }
+@media (prefers-reduced-motion: reduce) { .drawer, .scrim { transition: none; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <h1>لوحة متقدمي <span>Magmafy</span></h1>
+    <div class="actions">
+      <button class="btn" id="refreshBtn" type="button">تحديث</button>
+      <button class="btn" id="importBtn" type="button">استيراد ملف</button>
+      <button class="btn" id="demoBtn" type="button">بيانات تجريبية</button>
+      <button class="btn primary" id="settingsBtn" type="button">ربط الشيت</button>
+      <input type="file" id="fileInput" accept=".csv,.json" hidden>
+    </div>
+  </div>
+
+  <div id="banner"></div>
+  <div class="stats" id="stats"></div>
+  <div class="dist" id="dist" role="group" aria-label="توزيع التقييمات"></div>
+
+  <div class="filters">
+    <label>بحث<input type="search" id="q" placeholder="اسم أو بلد أو كلمة من الإجابات"></label>
+    <label>المستندات
+      <select id="fDocs"><option value="all">الكل</option><option value="complete">مكتملة</option><option value="incomplete">ناقصة</option></select>
+    </label>
+    <label>الحالة
+      <select id="fStatus"></select>
+    </label>
+    <label>الخبرة
+      <select id="fYears"><option value="">الكل</option><option value="اكثر">أكثر من ٥ سنوات</option><option value="5">٣ إلى ٥ سنوات</option><option value="3">١ إلى ٣ سنوات</option><option value="اقل">أقل من سنة</option></select>
+    </label>
+    <label>أقل تقييم: <b id="minVal">0</b>
+      <input type="range" id="fMin" min="0" max="100" step="5" value="0">
+    </label>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th><button type="button" data-sort="name">المتقدم</button></th>
+          <th><button type="button" data-sort="score">التقييم</button></th>
+          <th><button type="button" data-sort="years">الخبرة</button></th>
+          <th><button type="button" data-sort="spend">الميزانية</button></th>
+          <th>المستندات</th>
+          <th><button type="button" data-sort="submittedAt">التاريخ</button></th>
+          <th>الحالة</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+  <p class="small" style="margin-top:12px">التقييم أداة فرز أولي من الإجابات المكتوبة (كلمات وأرقام وتفاصيل). افتح رابط النتائج واحكم على الشغل الفعلي قبل أي قرار.</p>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" aria-label="تفاصيل المتقدم" aria-hidden="true"></aside>
+
+<dialog id="settings">
+  <form method="dialog" id="settingsForm">
+    <h2>ربط جوجل شيت</h2>
+    <p class="small">الصق رابط الـ Web app من Google Apps Script والتوكن الناتج من دالة setup. بيتحفظوا على متصفحك أنت فقط ولا يرتفعوا لأي مكان.</p>
+    <label>رابط الـ Web app<input type="url" id="endpointInput" class="ltr" placeholder="https://script.google.com/macros/s/.../exec"></label>
+    <label>التوكن<input type="password" id="tokenInput" class="ltr" autocomplete="off"></label>
+    <div class="row">
+      <button class="btn primary" value="save">حفظ وتحميل</button>
+      <button class="btn" value="clear">مسح البيانات المحفوظة</button>
+      <button class="btn" value="cancel">إغلاق</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="scoring.js"></script>
+<script src="demo-data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

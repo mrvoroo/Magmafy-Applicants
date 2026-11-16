@@ -180,7 +180,7 @@ const login = (env, email = A) => { env.post({ action: 'requestCode', email }); 
   ok(e.sheets.Applicants.length === n + 6 && e.mails.length === 0, 'invalid emails: rows stored, nothing mailed'); }
 
 // 25. mail caps protect admin login codes
-{ const e = makeEnv(A + ',' + B);
+{ const e = makeEnv(A + ',' + B); e.store.set('MAX_APPS', '500');
   for (let i = 0; i < 80; i++) e.post({ action: 'submit', name: 'N' + i, phone: '+20100', email: 'u' + i + '@example.com' });
   ok(e.mails.length === 40, 'at most 40 confirmation emails per day: ' + e.mails.length);
   const e2 = makeEnv(A + ',' + B); e2.ctx.MailApp.getRemainingDailyQuota = () => 15;
@@ -192,6 +192,42 @@ const login = (env, email = A) => { env.post({ action: 'requestCode', email }); 
   ok(e.post({ action: 'submit', name: 'N', phone: '+20100', email: 'a@example.com' }).ok, 'submit ok even if mail fails');
   const e2 = makeEnv(A + ',' + B); e2.sheets.Applicants[0] = ['id', 'submittedAt', 'name', 'phone', 'country', 'years', 'platforms', 'spend', 'niche', 'gulf', 'result', 'tracking', 'drop', 'cv', 'work', 'avail', 'rate', 'more'];
   e2.run('setup'); ok(e2.sheets.Applicants[0][18] === 'email', 'setup adds the email header to an existing sheet'); }
+
+// 27. batch limit: form closes by itself, stale pages are refused, reopen starts a new batch
+{ const e = makeEnv(A + ',' + B); e.store.set('MAX_APPS', '3'); // sheet already has 1 applicant
+  ok(e.post({ action: 'submit', name: 'a', phone: '+20100' }).ok && e.get({ action: 'status' }).open === true, '2nd applicant ok, still open');
+  ok(e.post({ action: 'submit', name: 'b', phone: '+20100' }).ok, '3rd applicant ok');
+  ok(e.get({ action: 'status' }).open === false, 'form closes itself when the limit is reached');
+  const n = e.sheets.Applicants.length; const r = e.post({ action: 'submit', name: 'c', phone: '+20100' });
+  ok(!r.ok && r.error === 'closed' && e.sheets.Applicants.length === n, 'no more rows after the limit');
+  const s = login(e); const d = e.post({ action: 'getApplicants', token: s.token }); ok(d.cap === 3 && d.used === 3 && d.open === false, 'dashboard gets used/cap');
+  e.store.set('CLOSED', '1'); e.store.delete('CLOSED'); // stale page that slipped through a race
+  ok(!e.post({ action: 'submit', name: 'late', phone: '+20100' }).ok && e.get({ action: 'status' }).open === false, 'full batch refuses even if CLOSED flag was lost, and re-closes');
+  const o = e.post({ action: 'setOpen', token: s.token, open: true }); ok(o.ok && o.used === 0 && o.cap === 3, 'reopen starts a new batch');
+  ok(e.post({ action: 'submit', name: 'new1', phone: '+20100' }).ok, 'new batch accepts applicants'); }
+
+// 28. owner notifications: only to NOTIFY_EMAIL, batched, quota safe
+{ const OWN = 'owner@example.com'; const e = makeEnv(A + ',' + B); e.store.set('MAX_APPS', '100');
+  e.post({ action: 'submit', name: 'x', phone: '+20100' }); ok(e.mails.length === 0, 'no NOTIFY_EMAIL => no notification');
+  e.store.set('NOTIFY_EMAIL', OWN);
+  e.post({ action: 'submit', name: 'First <i>One</i>', phone: '+20100', country: 'مصر', years: 'أكثر من ٥ سنوات', rate: '150 دولار' });
+  ok(e.mails.length === 1 && e.mails[0].to === OWN, 'first applicant notifies the owner immediately');
+  ok(e.mails[0].htmlBody.includes('150 دولار') && !e.mails[0].htmlBody.includes('<i>One'), 'notice shows rate and escapes names');
+  ok(!/\+20100/.test(e.mails[0].body + e.mails[0].htmlBody), 'phone number is not in the notice');
+  for (let i = 0; i < 4; i++) e.post({ action: 'submit', name: 'P' + i, phone: '+20100' });
+  ok(e.mails.length === 1, 'next applicants within 10 minutes are batched, no extra mail');
+  const s = login(e); const before = e.mails.length; e.post({ action: 'getApplicants', token: s.token });
+  ok(e.mails.length === before, 'dashboard does not flush before the gap passes');
+  e.store.set('n:last', String(Date.now() - 11 * 60 * 1000)); e.post({ action: 'getApplicants', token: s.token });
+  const dig = e.mails[e.mails.length - 1]; ok(dig.to === OWN && dig.subject.includes('4 متقدمين جدد'), 'waiting applicants arrive as one digest: ' + dig.subject);
+  e.ctx.MailApp.getRemainingDailyQuota = () => 2; const m0 = e.mails.length;
+  e.store.set('n:last', '0'); e.post({ action: 'submit', name: 'Q', phone: '+20100' }); ok(e.mails.length === m0, 'no notice when mail quota is nearly gone'); }
+
+// 29. final applicant forces a notice that says the form closed
+{ const OWN = 'owner@example.com'; const e = makeEnv(A + ',' + B); e.store.set('MAX_APPS', '3'); e.store.set('NOTIFY_EMAIL', OWN);
+  e.post({ action: 'submit', name: 'one', phone: '+20100' }); e.post({ action: 'submit', name: 'two', phone: '+20100' });
+  const last = e.mails[e.mails.length - 1]; ok(e.mails.length === 2 && last.subject.startsWith('اكتمل العدد') && last.body.includes('قفل باب التقديم تلقائيًا'), 'completion notice sent right away: ' + last.subject);
+  ok(e.mails.every((m) => m.to === OWN), 'notices only go to NOTIFY_EMAIL'); }
 
 console.log(fail === 0 ? `ALL ${pass} CHECKS PASSED` : `${fail} FAILED, ${pass} passed`);
 process.exit(fail ? 1 : 0);

@@ -13,6 +13,8 @@
  * 1. Project Settings (gear icon) > Script properties > Add script property:
  *      ADMINS = first@example.com,second@example.com      (comma separated, no other emails)
  * 2. Select function `authorize` and press Run. Approve the permissions (sending email is new).
+ *    Optional: NOTIFY_EMAIL = address that gets a "new applicant" email (batched, at most one per 10 minutes).
+ *    Optional: MAX_APPS = how many applications to accept before the form closes by itself (default 15).
  * 3. Select function `setup` and press Run. It keeps your existing sheet, adds the new `email` column
  *    header, creates the Reviews tab, and DELETES the old static token.
  * 4. Deploy > Manage deployments > pencil icon > Version: New version > Deploy.
@@ -46,6 +48,9 @@ var SUBMITS_PER_HOUR = 300;                // public form submissions per hour, 
 var CONFIRM_MAILS_PER_DAY = 40;            // applicant confirmation emails per day, all senders
 var MAIL_RESERVE = 20;                     // mail quota always kept free for admin login codes
 var CONFIRM_SAME_ADDRESS_S = 6 * 3600;     // one confirmation per address per 6 hours
+var DEFAULT_MAX_APPS = 15;                 // applications accepted per batch; override with script property MAX_APPS
+var NOTIFY_GAP_MS = 10 * 60 * 1000;        // at most one "new applicant" email per 10 minutes (the rest are batched)
+var NOTIFY_MAX_PENDING = 30;
 var LOGO_URL = 'https://careers.magmafyogp.com/logo-email.png';
 var SITE_URL = 'https://magmafyogp.com';
 
@@ -106,6 +111,7 @@ function setup() {
   reviewsSheet_();
   props.deleteProperty('TOKEN'); // the old static token no longer exists anywhere
   Logger.log('Sheet: ' + ss.getUrl());
+  Logger.log('Owner notifications: ' + (normEmail_(props_().getProperty('NOTIFY_EMAIL')) ? 'on' : 'OFF (add the NOTIFY_EMAIL property)'));
   Logger.log('Admins configured: ' + admins_().length + ' (must be 2)');
   Logger.log('Old token deleted. Now redeploy a NEW VERSION of the web app.');
 }
@@ -144,7 +150,19 @@ function submit_(data) {
     if (k === 'submittedAt') return new Date();
     return clean_(data[k], MAX_FIELD);
   });
-  withLock_(function () { var sh = sheet_(); ensureHeader_(sh); sh.appendRow(row); });
+  var outcome = withLock_(function () {
+    var sh = sheet_(); ensureHeader_(sh);
+    var used = usedCount_(sh);
+    if (used >= maxApps_()) { autoClose_(); return 'full'; } // batch is complete: refuse, even a stale page
+    sh.appendRow(row);
+    if (used + 1 >= maxApps_()) { autoClose_(); return 'last'; }
+    return 'ok';
+  });
+  if (outcome === 'full') return { ok: false, error: 'closed' };
+
+  // notify the owner (batched) and confirm to the applicant; neither can fail the submission
+  notifyNew_({ n: String(data.name).slice(0, 60), c: String(data.country == null ? '' : data.country).slice(0, 40),
+    y: String(data.years == null ? '' : data.years).slice(0, 40), r: String(data.rate == null ? '' : data.rate).slice(0, 80) }, outcome === 'last');
 
   // confirmation email to the applicant (never blocks or fails the submission)
   var to = normEmail_(data.email);
@@ -244,6 +262,85 @@ function confirmationHtml_(name) {
     '<a href="' + SITE_URL + '" style="color:#962fbf;text-decoration:none;font-weight:700;">magmafyogp.com</a> · © Magmafy' +
     '</td></tr>' +
     '</table></td></tr></table></body></html>';
+}
+
+// ---------------------------------------------------------------- batch limit + owner notifications
+
+function maxApps_() {
+  var n = parseInt(props_().getProperty('MAX_APPS'), 10);
+  return n >= 1 && n <= 500 ? n : DEFAULT_MAX_APPS;
+}
+function baseCount_() { return Math.max(0, parseInt(props_().getProperty('BASE'), 10) || 0); }
+function rowCount_(sh) { return Math.max(0, sh.getLastRow() - 1); }
+function usedCount_(sh) { return Math.max(0, rowCount_(sh) - baseCount_()); }
+function autoClose_() {
+  props_().setProperty('CLOSED', '1');
+  setJ_('closedMeta', { by: 'auto', at: new Date().toISOString(), open: false });
+}
+
+// Queue the applicant and send ONE email at most every NOTIFY_GAP_MS (always sent when the batch completes).
+function notifyNew_(item, force) {
+  try {
+    if (!normEmail_(props_().getProperty('NOTIFY_EMAIL'))) return;
+    var t = now_();
+    var batch = withLock_(function () {
+      var pend = getJ_('n:pend');
+      pend = (Array.isArray(pend) ? pend : []).concat([item]).slice(-NOTIFY_MAX_PENDING);
+      var last = Number(props_().getProperty('n:last')) || 0;
+      if (!force && t - last < NOTIFY_GAP_MS) { setJ_('n:pend', pend); return null; }
+      setJ_('n:pend', []);
+      props_().setProperty('n:last', String(t));
+      return pend;
+    });
+    if (batch) sendNotice_(batch);
+  } catch (err) { /* never affects the applicant */ }
+}
+
+// Called when an admin opens the dashboard: sends anything still waiting once the gap has passed.
+function flushNotices_() {
+  try {
+    if (!normEmail_(props_().getProperty('NOTIFY_EMAIL'))) return;
+    var t = now_();
+    var batch = withLock_(function () {
+      var pend = getJ_('n:pend');
+      var last = Number(props_().getProperty('n:last')) || 0;
+      if (!Array.isArray(pend) || !pend.length || t - last < NOTIFY_GAP_MS) return null;
+      setJ_('n:pend', []);
+      props_().setProperty('n:last', String(t));
+      return pend;
+    });
+    if (batch) sendNotice_(batch);
+  } catch (err) { /* ignore */ }
+}
+
+function sendNotice_(list) {
+  var to = normEmail_(props_().getProperty('NOTIFY_EMAIL'));
+  if (!to || !list.length || MailApp.getRemainingDailyQuota() <= 3) return;
+  var used = usedCount_(sheet_()), max = maxApps_(), done = used >= max;
+  var subject = (done ? 'اكتمل العدد: ' : '') + (list.length === 1 ? 'متقدم جديد' : list.length + ' متقدمين جدد') + ' (' + used + ' من ' + max + ')';
+  var lines = list.map(function (x) {
+    return '• ' + x.n + (x.c ? ' - ' + x.c : '') + (x.y ? ' - ' + x.y : '') + (x.r ? ' - المقابل: ' + x.r : '');
+  });
+  var url = 'https://applicants.magmafyogp.com';
+  var text = lines.join('\n') + '\n\nعدد التقديمات في الدفعة الحالية: ' + used + ' من ' + max + '.' +
+    (done ? '\nتم قفل باب التقديم تلقائيًا لأن العدد اكتمل.' : '') + '\n\nافتح اللوحة: ' + url + '\n';
+  var font = "Tahoma,'Segoe UI',Arial,sans-serif";
+  var items = list.map(function (x) {
+    return '<tr><td style="padding:10px 0;border-bottom:1px solid #eadcf3;font:15px/1.7 ' + font + ';color:#2a1a38;text-align:right;"><b>' + esc_(x.n) + '</b>' +
+      (x.c || x.y ? '<br><span style="color:#8f7ea3;font-size:13px;">' + esc_([x.c, x.y].filter(String).join(' · ')) + '</span>' : '') +
+      (x.r ? '<br><span style="color:#b36b00;font-weight:700;">المقابل: ' + esc_(x.r) + '</span>' : '') + '</td></tr>';
+  }).join('');
+  var html = '<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"></head><body style="margin:0;background:#f3eef7;">' +
+    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#f3eef7"><tr><td align="center" style="padding:24px 12px;">' +
+    '<table role="presentation" width="560" cellpadding="0" cellspacing="0" dir="rtl" style="width:100%;max-width:560px;background:#ffffff;border-radius:18px;overflow:hidden;">' +
+    '<tr><td bgcolor="#0e0716" style="background:#0e0716;padding:22px 24px;text-align:right;font:700 18px/1.4 ' + font + ';color:#ffffff;">' +
+    '<img src="' + LOGO_URL + '" width="40" height="40" alt="" style="vertical-align:middle;border-radius:10px;margin-left:12px;border:0;">' + esc_(subject) + '</td></tr>' +
+    '<tr><td style="padding:12px 24px 4px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0">' + items + '</table></td></tr>' +
+    '<tr><td style="padding:14px 24px 24px;text-align:right;font:14px/1.8 ' + font + ';color:#5b4a6b;">' +
+    'الدفعة الحالية: <b>' + used + ' من ' + max + '</b>' + (done ? '<br><b style="color:#c0264f;">تم قفل باب التقديم تلقائيًا لأن العدد اكتمل.</b>' : '') +
+    '<br><a href="' + url + '" style="color:#962fbf;font-weight:700;text-decoration:none;">افتح لوحة المتقدمين</a></td></tr>' +
+    '</table></td></tr></table></body></html>';
+  MailApp.sendEmail({ to: to, name: 'Magmafy', subject: subject, body: text, htmlBody: html });
 }
 
 // make sure the header row has every column name (adds the new `email` header to an existing sheet)
@@ -370,6 +467,7 @@ function logout_(data) {
 // ---------------------------------------------------------------- private actions
 
 function getApplicants_(data, email) {
+  flushNotices_();
   var values = sheet_().getDataRange().getValues();
   var head = values.shift();
   var rows = values.map(function (r) {
@@ -383,7 +481,7 @@ function getApplicants_(data, email) {
   rv.forEach(function (r) {
     reviews[String(r[0])] = { status: r[1], note: r[2], by: r[3], at: r[4] instanceof Date ? r[4].toISOString() : r[4] };
   });
-  return { ok: true, rows: rows, reviews: reviews, open: !isClosed_(), me: email };
+  return { ok: true, rows: rows, reviews: reviews, open: !isClosed_(), me: email, used: usedCount_(sheet_()), cap: maxApps_() };
 }
 
 function saveReview_(data, email) {
@@ -403,9 +501,12 @@ function saveReview_(data, email) {
 
 function setOpen_(data, email) {
   var open = data.open === true;
-  if (open) props_().deleteProperty('CLOSED'); else props_().setProperty('CLOSED', '1');
+  if (open) {
+    props_().setProperty('BASE', String(rowCount_(sheet_()))); // reopening starts a fresh batch of MAX_APPS
+    props_().deleteProperty('CLOSED');
+  } else props_().setProperty('CLOSED', '1');
   setJ_('closedMeta', { by: email, at: new Date().toISOString(), open: open });
-  return { ok: true, open: open };
+  return { ok: true, open: open, used: usedCount_(sheet_()), cap: maxApps_() };
 }
 
 // ---------------------------------------------------------------- helpers

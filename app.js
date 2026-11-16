@@ -18,7 +18,7 @@
   var state = {
     rows: [], evals: {}, dups: {}, reviews: {}, source: 'none', // 'server' | 'demo' | 'file' | 'none'
     sortKey: 'score', sortDir: -1, band: '', selected: null,
-    open: null, me: ''
+    open: null, me: '', used: null, cap: null
   };
 
   // ---------- helpers ----------
@@ -105,7 +105,7 @@
 
   function clearData() {
     state.rows = []; state.evals = {}; state.dups = {}; state.reviews = {}; state.source = 'none';
-    state.selected = null; state.me = ''; state.open = null;
+    state.selected = null; state.me = ''; state.open = null; state.used = null; state.cap = null;
     closeDrawer(true);
     $('drawer').textContent = '';
     $('tbody').textContent = '';
@@ -168,7 +168,7 @@
       if (!j || !j.ok) { banner('error', 'تعذّر تحميل البيانات. حاول التحديث.'); return false; }
       state.me = j.me || '';
       state.reviews = j.reviews || {};
-      state.open = j.open;
+      state.open = j.open; state.used = j.used; state.cap = j.cap;
       setMe(state.me);
       banner('', '');
       setRows(j.rows || [], 'server');
@@ -230,7 +230,9 @@
     if (state.open === null) { st.textContent = '...'; st.className = 'pill'; btn.disabled = true; return; }
     st.textContent = state.open ? 'مفتوح' : 'مغلق';
     st.className = 'pill ' + (state.open ? 'open' : 'closed');
-    hint.textContent = state.open ? '' : ' الزوار بيشوفوا رسالة إن التقديم مقفول حاليًا.';
+    var count = state.cap ? ' الدفعة الحالية: ' + state.used + ' من ' + state.cap + ' تقديم.' : '';
+    var full = state.cap && state.used >= state.cap;
+    hint.textContent = count + (state.open ? '' : (full ? ' اتقفل تلقائيًا لما العدد اكتمل.' : ' الزوار بيشوفوا رسالة إن التقديم مقفول حاليًا.'));
     btn.textContent = state.open ? 'قفل باب التقديم' : 'فتح باب التقديم';
     btn.className = 'btn' + (state.open ? ' danger' : ' primary');
     btn.disabled = false;
@@ -253,12 +255,12 @@
   function toggleGate() {
     var wantOpen = !state.open;
     var title = wantOpen ? 'فتح باب التقديم؟' : 'قفل باب التقديم؟';
-    var text = wantOpen ? 'هيرجع الفورم يستقبل طلبات جديدة.' : 'الفورم هيتقفل فورًا ويظهر للناس إننا اكتفينا حاليًا وإنهم ينتظروا إعلان جديد. الطلبات الجديدة بترفض من السيرفر نفسه.';
+    var text = wantOpen ? 'هيرجع الفورم يستقبل طلبات جديدة، وهتبدأ دفعة جديدة بنفس الحد (' + (state.cap || '') + ' تقديم).' : 'الفورم هيتقفل فورًا ويظهر للناس إننا اكتفينا حاليًا وإنهم ينتظروا إعلان جديد. الطلبات الجديدة بترفض من السيرفر نفسه.';
     confirmDialog(title, text, wantOpen ? 'فتح' : 'قفل').then(function (yes) {
       if (!yes) return;
       $('gateBtn').disabled = true;
       api('setOpen', { token: ss.get(), open: wantOpen }).then(function (j) {
-        if (j && j.ok) { state.open = j.open; renderGate(); }
+        if (j && j.ok) { state.open = j.open; state.used = j.used; state.cap = j.cap; renderGate(); }
         else { banner('error', 'تعذّر تغيير حالة التقديم.'); renderGate(); }
       }).catch(function () { renderGate(); });
     });

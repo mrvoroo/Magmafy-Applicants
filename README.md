@@ -42,3 +42,10 @@ The same button reopens applications.
 ## What the code cannot protect
 Anyone who can open the Google account that owns the sheet and script (or who you share the sheet with) can
 read the data directly. Keep that account on 2-step verification, do not share the sheet, and keep this repo private.
+
+## Batch limit and owner notifications
+- The form accepts `MAX_APPS` applications (script property, default 15) and then closes by itself. The server refuses the
+  next submission even from an old open page. Reopening from the dashboard starts a fresh batch of the same size.
+- Set the script property `NOTIFY_EMAIL` to get a "new applicant" email. At most one email per 10 minutes: applicants that
+  arrive in between are grouped into one digest (sent on the next applicant or when the dashboard is opened). When the batch
+  completes a notice is sent right away. Notices never include phone numbers or emails and are skipped if the mail quota is low.

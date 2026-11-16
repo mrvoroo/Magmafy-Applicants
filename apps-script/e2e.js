@@ -38,7 +38,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const code = env.mails[0].body.match(/\d{8}/)[0];
   type($('codeInput'), code); submit($('codeForm')); await sleep(300);
   ok(!$('main').hidden && $('login').hidden, 'admin enters'); ok($('tbody').textContent.includes('Ali'), 'data shown');
-  ok($('gateState').textContent === 'مفتوح', 'gate shows open'); ok($('meLabel').textContent === A, 'shows who is logged in');
+  ok($('gateState').textContent === 'مفتوح', 'gate shows open'); ok($('gateHint').textContent.includes('1 من 15'), 'gate shows used/cap'); ok($('meLabel').textContent === A, 'shows who is logged in');
   ok(w.sessionStorage.getItem('mg_session').length === 96, 'session token kept in sessionStorage only');
   ok(w.localStorage.length === 0, 'nothing in localStorage');
 

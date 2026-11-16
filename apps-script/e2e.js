@@ -42,6 +42,19 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   ok(w.sessionStorage.getItem('mg_session').length === 96, 'session token kept in sessionStorage only');
   ok(w.localStorage.length === 0, 'nothing in localStorage');
 
+  // chip, rate column, demo toggle, full answers
+  ok(!$('meBox').hidden && $('meAv').textContent === 'm', 'email chip shows avatar initial');
+  ok(d.querySelectorAll('th').length === 9 && d.querySelector('td.rate'), 'rate column present');
+  const realText = $('tbody').textContent;
+  $('demoBtn').click(); await sleep(50);
+  ok($('demoBtn').textContent === 'الرجوع للبيانات الحقيقية' && !$('tbody').textContent.includes('Ali') && $('banner').textContent.includes('تجريبية'), 'demo mode shows demo rows and a way back');
+  $('demoBtn').click(); await sleep(300);
+  ok($('demoBtn').textContent === 'بيانات تجريبية' && $('tbody').textContent.includes('Ali') && !$('banner').textContent.includes('تجريبية'), 'button returns to the real data');
+  d.querySelector('#tbody tr').click();
+  ok(d.querySelector('#drawer .rate-hero'), 'rate shown prominently in the drawer');
+  ok(d.querySelectorAll('#drawer .answer').length === 8 && d.querySelectorAll('#drawer .fact').length === 4, 'all 8 answers and 4 facts shown');
+  $('drawer').querySelector('.close').click();
+
   // close applications
   $('gateBtn').click(); ok($('confirmDlg').hasAttribute('open'), 'asks for confirmation'); $('confirmYes').click(); await sleep(200);
   ok(env.get({ action: 'status' }).open === false && $('gateState').textContent === 'مغلق', 'applications closed on the server');

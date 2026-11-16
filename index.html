@@ -115,7 +115,7 @@ td.rank { color: var(--faint); width: 44px; font-variant-numeric: tabular-nums; 
 .crit span.pts { text-align: left; font-variant-numeric: tabular-nums; color: var(--muted); }
 .checklist { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .checklist li { display: flex; gap: 8px; align-items: baseline; }
-.answer { background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 10px 14px; margin-bottom: 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.answer { background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 10px 14px; margin-bottom: 10px; overflow-wrap: anywhere; }
 .answer b { display: block; color: var(--faint); font-weight: 500; font-size: 13px; }
 .row-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .drawer select, .drawer textarea { width: 100%; background: var(--bg); border: 1px solid var(--border-strong); border-radius: 12px; padding: 8px 12px; }
@@ -147,6 +147,33 @@ dialog .row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .gate { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; background: var(--bg-2); border: 1px solid var(--border); border-radius: 16px; padding: 12px 16px; margin-bottom: 14px; }
 .gate .pill.open { color: var(--good); } .gate .pill.closed { color: var(--bad); }
 .btn.danger { border-color: var(--bad); color: var(--bad); }
+
+/* signed-in chip */
+.me { display: flex; align-items: center; gap: 10px; padding: 5px 6px 5px 16px; border: 1px solid var(--border-strong); border-radius: 99px; background: linear-gradient(135deg, rgba(150, 47, 191, 0.22), rgba(214, 41, 118, 0.14)); max-width: 100%; }
+.me-av { position: relative; flex: none; width: 36px; height: 36px; border-radius: 50%; background: var(--grad-btn); display: grid; place-items: center; font-family: var(--f-display); font-weight: 700; font-size: 17px; color: #fff; text-transform: uppercase; }
+.me-av::after { content: ''; position: absolute; inset-block-end: -1px; inset-inline-start: -1px; width: 11px; height: 11px; border-radius: 50%; background: var(--good); border: 2px solid var(--bg); }
+.me-txt { display: grid; line-height: 1.25; min-width: 0; }
+.me-txt small { font-size: 11px; color: var(--faint); }
+.me-txt b { font-size: 14px; font-weight: 500; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 240px; }
+
+/* expected pay: loud on purpose */
+td.rate { min-width: 150px; max-width: 220px; overflow-wrap: anywhere; font-weight: 700; color: var(--yellow); }
+td.rate.none { color: var(--bad); font-weight: 500; }
+.rate-hero { margin: 16px 0; padding: 16px 18px; border-radius: 16px; border: 1.5px solid var(--yellow); background: linear-gradient(135deg, rgba(254, 218, 117, 0.18), rgba(250, 126, 30, 0.12) 55%, rgba(214, 41, 118, 0.14)); }
+.rate-hero small { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+.rate-hero b { display: block; font-family: var(--f-display); font-size: clamp(24px, 4.5vw, 32px); line-height: 1.3; color: var(--yellow); overflow-wrap: anywhere; white-space: pre-wrap; }
+.rate-hero.none { border-color: var(--bad); background: rgba(255, 122, 156, 0.1); }
+.rate-hero.none b { color: var(--bad); font-size: 20px; }
+.facts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 12px 0; }
+.fact { background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 8px 12px; min-width: 0; }
+.fact small { display: block; font-size: 12px; color: var(--faint); }
+.fact b { display: block; font-weight: 500; font-size: 15px; overflow-wrap: anywhere; }
+.answer .a-label { display: flex; gap: 8px; align-items: baseline; color: var(--yellow); font-weight: 700; font-size: 14px; margin-bottom: 4px; }
+.answer .a-label i { font-style: normal; color: var(--faint); font-weight: 500; font-variant-numeric: tabular-nums; }
+.answer .a-text { white-space: pre-wrap; font-size: 16px; line-height: 1.75; color: var(--text); }
+.answer .a-empty { color: var(--faint); font-style: italic; }
+.checklist .url { flex-basis: 100%; font-size: 12px; color: var(--faint); direction: ltr; text-align: left; overflow-wrap: anywhere; }
+.checklist li { flex-wrap: wrap; }
 [hidden] { display: none !important; }
 @media (max-width: 720px) { .dist { grid-template-columns: repeat(2, 1fr); } .crit { grid-template-columns: 1fr 1fr 48px; } }
 @media (prefers-reduced-motion: reduce) { .drawer, .scrim { transition: none; } }
@@ -183,7 +210,10 @@ dialog .row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
   <div class="topbar">
     <h1 class="brandline"><img src="logo-mark.webp" alt="" width="36" height="36">لوحة متقدمي <span>Magmafy</span></h1>
     <div class="actions">
-      <span class="pill neutral ltr" id="meLabel"></span>
+      <div class="me" id="meBox" hidden title="الحساب المسجّل دخوله">
+        <span class="me-av" id="meAv" aria-hidden="true"></span>
+        <span class="me-txt"><small>مسجّل الدخول</small><b class="ltr" id="meLabel"></b></span>
+      </div>
       <button class="btn" id="refreshBtn" type="button">تحديث</button>
       <button class="btn" id="importBtn" type="button">استيراد ملف</button>
       <button class="btn" id="demoBtn" type="button">بيانات تجريبية</button>
@@ -226,6 +256,7 @@ dialog .row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
           <th><button type="button" data-sort="score">التقييم</button></th>
           <th><button type="button" data-sort="years">الخبرة</button></th>
           <th><button type="button" data-sort="spend">الميزانية</button></th>
+          <th>المقابل المتوقع</th>
           <th>المستندات</th>
           <th><button type="button" data-sort="submittedAt">التاريخ</button></th>
           <th>الحالة</th>

@@ -49,6 +49,11 @@
     var t = S.norm(r.years);
     return t.indexOf('اكثر') !== -1 ? 4 : (t.indexOf('3') !== -1 && t.indexOf('5') !== -1) ? 3 : t.indexOf('1') !== -1 ? 2 : t.indexOf('اقل') !== -1 ? 1 : 0;
   }
+  function setMe(email) {
+    $('meLabel').textContent = email || '';
+    $('meAv').textContent = email ? email.charAt(0) : '';
+    $('meBox').hidden = !email;
+  }
   function review(id) { return state.reviews[id] || {}; }
   function statusOf(id) { return review(id).status || 'جديد'; }
 
@@ -108,6 +113,7 @@
     $('dist').textContent = '';
     $('banner').textContent = '';
     $('q').value = '';
+    setMe('');
     stopIdle();
   }
 
@@ -163,7 +169,7 @@
       state.me = j.me || '';
       state.reviews = j.reviews || {};
       state.open = j.open;
-      $('meLabel').textContent = state.me;
+      setMe(state.me);
       banner('', '');
       setRows(j.rows || [], 'server');
       renderGate();
@@ -290,7 +296,14 @@
   }
 
   // ---------- render ----------
+  function renderDemoBtn() {
+    var b = $('demoBtn'), away = state.source === 'demo' || state.source === 'file';
+    b.textContent = away ? 'الرجوع للبيانات الحقيقية' : 'بيانات تجريبية';
+    b.className = 'btn' + (away ? ' primary' : '');
+  }
+
   function render() {
+    renderDemoBtn();
     renderBanner();
     renderStats();
     renderDist();
@@ -344,7 +357,7 @@
     var list = visibleRows(), tb = $('tbody');
     tb.textContent = '';
     if (!list.length) {
-      tb.appendChild(h('tr', null, h('td', { colspan: 8, class: 'empty', text: state.rows.length ? 'لا نتائج مطابقة للفلاتر.' : 'لا يوجد متقدمون بعد.' })));
+      tb.appendChild(h('tr', null, h('td', { colspan: 9, class: 'empty', text: state.rows.length ? 'لا نتائج مطابقة للفلاتر.' : 'لا يوجد متقدمون بعد.' })));
       return;
     }
     list.forEach(function (r, i) {
@@ -355,6 +368,7 @@
         h('td', null, h('div', { class: 'score ' + e.band.key }, h('b', { text: e.score }), h('div', { class: 'meter' }, h('i', { style: 'width:' + e.score + '%' })))),
         h('td', { text: r.years || '-' }),
         h('td', { class: 'ltr', text: S.parseSpendUSD(r.spend) ? '$' + S.parseSpendUSD(r.spend).toLocaleString('en-US') : '-' }),
+        h('td', { class: 'rate' + (r.rate ? '' : ' none'), text: r.rate || 'لم يذكر' }),
         h('td', null, docsPill(e)),
         h('td', { text: fmtDate(r.submittedAt) }),
         h('td', null, h('span', { class: 'pill neutral', text: statusOf(r.id) })));
@@ -375,6 +389,7 @@
     var cls = info.status === 'ok' ? 'ok' : info.status === 'unknown' ? 'warn' : 'miss';
     var li = h('li', null, h('span', { class: 'pill ' + cls, text: text }), h('span', { text: label }));
     if (info.url && safeUrl(info.url)) li.appendChild(h('a', { href: safeUrl(info.url), target: '_blank', rel: 'noopener noreferrer', text: 'افتح' }));
+    if (info.url) li.appendChild(h('span', { class: 'url', text: String(info.url).slice(0, 300) }));
     return li;
   }
 
@@ -386,7 +401,14 @@
     var phone = String(r.phone || '').replace(/[^\d]/g, '');
     d.appendChild(h('button', { class: 'btn close', type: 'button', onclick: function () { closeDrawer(); }, text: 'إغلاق' }));
     d.appendChild(h('h2', { text: r.name || '(بدون اسم)' }));
-    d.appendChild(h('div', { class: 'small', text: [r.country, r.years, r.avail ? 'يبدأ: ' + r.avail : '', r.rate ? 'المقابل: ' + r.rate : ''].filter(Boolean).join(' | ') }));
+    d.appendChild(h('div', { class: 'rate-hero' + (r.rate ? '' : ' none') },
+      h('small', { text: 'المقابل المتوقع (شهريًا أو نسبة من الإنفاق)' }),
+      h('b', { text: r.rate || 'لم يذكر المقابل المتوقع' })));
+    var facts = h('div', { class: 'facts' });
+    [['بلد الإقامة', r.country], ['سنوات الخبرة', r.years], ['متى يبدأ', r.avail], ['واتساب', r.phone, true]].forEach(function (f) {
+      facts.appendChild(h('div', { class: 'fact' }, h('small', { text: f[0] }), h('b', { class: f[2] ? 'ltr' : '', text: f[1] || 'لم يُجب' })));
+    });
+    d.appendChild(facts);
     d.appendChild(h('div', { class: 'head-score' },
       h('div', { class: 'big band-' + e.band.key, text: e.score }),
       h('div', null, h('b', { class: 'band-' + e.band.key, text: e.band.label }), h('div', { class: 'small', text: 'من ١٠٠' }))));
@@ -424,9 +446,13 @@
     d.appendChild(h('div', { style: 'margin-top:8px' }, note));
     if (review(id).by) d.appendChild(h('p', { class: 'small', text: 'آخر تعديل: ' + review(id).by }));
 
-    d.appendChild(h('h3', { text: 'إجاباته' }));
-    [['platforms', 'المنصات'], ['spend', 'أعلى ميزانية شهرية'], ['niche', 'خبرة الأثاث والمتاجر'], ['gulf', 'السوق الخليجي'], ['result', 'أفضل نتيجة'], ['tracking', 'التأكد من التتبع'], ['drop', 'أول ٣ فحوصات عند هبوط الأداء'], ['more', 'ملاحظات منه']].forEach(function (f) {
-      if (r[f[0]]) d.appendChild(h('div', { class: 'answer' }, h('b', { text: f[1] }), String(r[f[0]])));
+    d.appendChild(h('h3', { text: 'إجاباته كاملة' }));
+    var qs = [['platforms', 'المنصات اللي أدارها بميزانية حقيقية'], ['spend', 'أعلى ميزانية شهرية أدارها'], ['niche', 'خبرته في الأثاث والديكور والمتاجر'], ['gulf', 'خبرته مع السوق السعودي والخليجي'], ['result', 'أفضل نتيجة حققها لعميل'], ['tracking', 'إزاي بيتأكد إن التتبع سليم'], ['drop', 'أول ٣ حاجات بيفحصها لما الأداء يهبط'], ['more', 'أي شيء تاني حب يقوله']];
+    qs.forEach(function (f, i) {
+      var v = r[f[0]] == null ? '' : String(r[f[0]]).trim();
+      d.appendChild(h('div', { class: 'answer' },
+        h('div', { class: 'a-label' }, h('i', { text: i + 1 }), h('span', { text: f[1] })),
+        h('div', { class: 'a-text' + (v ? '' : ' a-empty'), text: v || 'لم يُجب' })));
     });
   }
 
@@ -519,7 +545,12 @@
     $('scrim').addEventListener('click', function () { closeDrawer(); });
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && state.selected) closeDrawer(); });
 
-    $('demoBtn').addEventListener('click', function () { setRows(JSON.parse(JSON.stringify(window.MAGMAFY_DEMO_ROWS)), 'demo'); });
+    $('demoBtn').addEventListener('click', function () {
+      closeDrawer(true);
+      if (state.source === 'demo' || state.source === 'file') { loadData(); return; } // back to the real data
+      state.reviews = {};
+      setRows(JSON.parse(JSON.stringify(window.MAGMAFY_DEMO_ROWS)), 'demo');
+    });
     $('refreshBtn').addEventListener('click', function () { loadData(); });
     $('logoutBtn').addEventListener('click', logout);
     $('gateBtn').addEventListener('click', toggleGate);
@@ -533,6 +564,8 @@
           var rows = /\.json$/i.test(f.name) ? JSON.parse(rd.result) : parseCSV(String(rd.result).replace(/^﻿/, ''));
           if (rows && rows.rows) rows = rows.rows;
           if (!Array.isArray(rows)) throw new Error('صيغة غير مدعومة');
+          closeDrawer(true);
+          state.reviews = {};
           setRows(rows, 'file');
         } catch (err) { banner('error', 'تعذّر قراءة الملف: ' + err.message); }
       };

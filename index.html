@@ -5,6 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#0e0716">
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="favicon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>لوحة متقدمي Magmafy</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -44,6 +48,8 @@ a { color: var(--yellow); }
 .app { max-width: 1280px; margin: 0 auto; padding: 18px clamp(14px, 3vw, 32px) 60px; }
 .topbar { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; justify-content: space-between; padding-bottom: 16px; }
 .topbar h1 { font-family: var(--f-display); font-size: clamp(22px, 3vw, 30px); margin: 0; }
+.brandline { display: flex; align-items: center; gap: 12px; }
+.brandline img { border-radius: 10px; display: block; }
 .topbar h1 span { background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .topbar .actions { display: flex; flex-wrap: wrap; gap: 10px; }
 .btn { background: var(--bg-3); border: 1px solid var(--border-strong); border-radius: 99px; padding: 8px 18px; cursor: pointer; text-decoration: none; color: var(--text); }
@@ -126,7 +132,7 @@ dialog .row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 <body>
 <div class="app">
   <div class="topbar">
-    <h1>لوحة متقدمي <span>Magmafy</span></h1>
+    <h1 class="brandline"><img src="logo-mark.webp" alt="" width="36" height="36">لوحة متقدمي <span>Magmafy</span></h1>
     <div class="actions">
       <button class="btn" id="refreshBtn" type="button">تحديث</button>
       <button class="btn" id="importBtn" type="button">استيراد ملف</button>

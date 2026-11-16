@@ -402,8 +402,8 @@
     d.appendChild(h('button', { class: 'btn close', type: 'button', onclick: function () { closeDrawer(); }, text: 'إغلاق' }));
     d.appendChild(h('h2', { text: r.name || '(بدون اسم)' }));
     d.appendChild(h('div', { class: 'rate-hero' + (r.rate ? '' : ' none') },
-      h('small', { text: 'المقابل المتوقع (شهريًا أو نسبة من الإنفاق)' }),
-      h('b', { text: r.rate || 'لم يذكر المقابل المتوقع' })));
+      h('small', { text: 'المقابل المتوقع على كل عميل' }),
+      h('b', { text: r.rate || 'لم يذكر المقابل' })));
     var facts = h('div', { class: 'facts' });
     [['بلد الإقامة', r.country], ['سنوات الخبرة', r.years], ['متى يبدأ', r.avail], ['واتساب', r.phone, true], ['الإيميل', r.email, true, true]].forEach(function (f) {
       facts.appendChild(h('div', { class: 'fact' + (f[3] ? ' wide' : '') }, h('small', { text: f[0] }), h('b', { class: f[2] ? 'ltr' : '', text: f[1] || 'لم يُجب' })));

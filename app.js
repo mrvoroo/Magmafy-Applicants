@@ -405,8 +405,8 @@
       h('small', { text: 'المقابل المتوقع (شهريًا أو نسبة من الإنفاق)' }),
       h('b', { text: r.rate || 'لم يذكر المقابل المتوقع' })));
     var facts = h('div', { class: 'facts' });
-    [['بلد الإقامة', r.country], ['سنوات الخبرة', r.years], ['متى يبدأ', r.avail], ['واتساب', r.phone, true]].forEach(function (f) {
-      facts.appendChild(h('div', { class: 'fact' }, h('small', { text: f[0] }), h('b', { class: f[2] ? 'ltr' : '', text: f[1] || 'لم يُجب' })));
+    [['بلد الإقامة', r.country], ['سنوات الخبرة', r.years], ['متى يبدأ', r.avail], ['واتساب', r.phone, true], ['الإيميل', r.email, true, true]].forEach(function (f) {
+      facts.appendChild(h('div', { class: 'fact' + (f[3] ? ' wide' : '') }, h('small', { text: f[0] }), h('b', { class: f[2] ? 'ltr' : '', text: f[1] || 'لم يُجب' })));
     });
     d.appendChild(facts);
     d.appendChild(h('div', { class: 'head-score' },

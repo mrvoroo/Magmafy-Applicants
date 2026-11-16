@@ -52,7 +52,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   ok($('demoBtn').textContent === 'بيانات تجريبية' && $('tbody').textContent.includes('Ali') && !$('banner').textContent.includes('تجريبية'), 'button returns to the real data');
   d.querySelector('#tbody tr').click();
   ok(d.querySelector('#drawer .rate-hero'), 'rate shown prominently in the drawer');
-  ok(d.querySelectorAll('#drawer .answer').length === 8 && d.querySelectorAll('#drawer .fact').length === 4, 'all 8 answers and 4 facts shown');
+  ok(d.querySelectorAll('#drawer .answer').length === 8 && d.querySelectorAll('#drawer .fact').length === 5, 'all 8 answers and 5 facts shown');
   $('drawer').querySelector('.close').click();
 
   // close applications

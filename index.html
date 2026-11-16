@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src https://script.google.com https://script.googleusercontent.com; base-uri 'none'; form-action 'none'">
+<style id="antiframe">html { display: none !important; }</style>
 <meta name="theme-color" content="#0e0716">
 <link rel="icon" href="favicon.ico" sizes="any">
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
@@ -125,23 +128,75 @@ dialog label { display: grid; gap: 4px; margin-bottom: 12px; }
 dialog input { background: var(--bg); border: 1px solid var(--border-strong); border-radius: 12px; padding: 9px 12px; width: 100%; }
 dialog .row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 
+.login { min-height: 100%; display: grid; place-items: center; padding: 20px; }
+.login-card { width: min(420px, 100%); background: var(--bg-2); border: 1px solid var(--border-strong); border-radius: 22px; padding: 28px; display: grid; gap: 14px; }
+.login-card h1 { font-family: var(--f-display); font-size: 24px; margin: 0; }
+.login-card .grad { background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.login-logo { border-radius: 14px; display: block; }
+.login-card form { display: grid; gap: 10px; }
+.login-card label { color: var(--muted); font-size: 14px; }
+.login-card input { background: var(--bg); border: 1px solid var(--border-strong); border-radius: 12px; padding: 11px 14px; width: 100%; }
+.code-input { font-size: 24px; letter-spacing: 0.35em; text-align: center; font-family: var(--f-display); }
+.btn.wide { width: 100%; padding: 11px; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.login-links { display: flex; justify-content: space-between; gap: 10px; }
+.linkbtn { background: none; border: 0; color: var(--yellow); cursor: pointer; padding: 4px 0; text-decoration: underline; }
+.linkbtn:disabled { color: var(--faint); cursor: default; text-decoration: none; }
+.login-msg { min-height: 1.4em; font-size: 14px; color: var(--muted); }
+.login-msg.err { color: var(--bad); }
+.gate { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; background: var(--bg-2); border: 1px solid var(--border); border-radius: 16px; padding: 12px 16px; margin-bottom: 14px; }
+.gate .pill.open { color: var(--good); } .gate .pill.closed { color: var(--bad); }
+.btn.danger { border-color: var(--bad); color: var(--bad); }
+[hidden] { display: none !important; }
 @media (max-width: 720px) { .dist { grid-template-columns: repeat(2, 1fr); } .crit { grid-template-columns: 1fr 1fr 48px; } }
 @media (prefers-reduced-motion: reduce) { .drawer, .scrim { transition: none; } }
 </style>
 </head>
 <body>
-<div class="app">
+<section id="login" class="login" hidden>
+  <div class="login-card">
+    <img src="logo-mark.webp" alt="" width="56" height="56" class="login-logo">
+    <h1>لوحة متقدمي <span class="grad">Magmafy</span></h1>
+    <p class="small">الدخول مقتصر على المصرّح لهم فقط.</p>
+
+    <form id="emailForm" autocomplete="on" novalidate>
+      <label for="emailInput">الإيميل</label>
+      <input type="email" id="emailInput" class="ltr" autocomplete="email" required>
+      <button class="btn primary wide" type="submit" id="emailBtn">إرسال كود الدخول</button>
+    </form>
+
+    <form id="codeForm" autocomplete="off" novalidate hidden>
+      <p class="small" id="codeHint">لو الإيميل مصرّح له بالدخول، هيوصله كود من ٨ أرقام خلال دقيقة. الكود صالح ١٠ دقائق ويُستخدم مرة واحدة.</p>
+      <label for="codeInput">كود الدخول</label>
+      <input type="text" id="codeInput" class="ltr code-input" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="one-time-code" required>
+      <button class="btn primary wide" type="submit" id="codeBtn">دخول</button>
+      <div class="login-links">
+        <button class="linkbtn" type="button" id="resendBtn">إعادة إرسال الكود</button>
+        <button class="linkbtn" type="button" id="changeEmailBtn">تغيير الإيميل</button>
+      </div>
+    </form>
+    <div class="login-msg" id="loginMsg" role="alert" aria-live="polite"></div>
+  </div>
+</section>
+
+<div class="app" id="main" hidden>
   <div class="topbar">
     <h1 class="brandline"><img src="logo-mark.webp" alt="" width="36" height="36">لوحة متقدمي <span>Magmafy</span></h1>
     <div class="actions">
+      <span class="pill neutral ltr" id="meLabel"></span>
       <button class="btn" id="refreshBtn" type="button">تحديث</button>
       <button class="btn" id="importBtn" type="button">استيراد ملف</button>
       <button class="btn" id="demoBtn" type="button">بيانات تجريبية</button>
-      <button class="btn primary" id="settingsBtn" type="button">ربط الشيت</button>
+      <button class="btn" id="logoutBtn" type="button">تسجيل الخروج</button>
       <input type="file" id="fileInput" accept=".csv,.json" hidden>
     </div>
   </div>
 
+  <div class="gate" id="gate">
+    <div><b>باب التقديم:</b> <span class="pill" id="gateState">...</span>
+      <span class="small" id="gateHint"></span></div>
+    <button class="btn" id="gateBtn" type="button" disabled>قفل باب التقديم</button>
+  </div>
   <div id="banner"></div>
   <div class="stats" id="stats"></div>
   <div class="dist" id="dist" role="group" aria-label="توزيع التقييمات"></div>
@@ -185,20 +240,16 @@ dialog .row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 <div class="scrim" id="scrim"></div>
 <aside class="drawer" id="drawer" aria-label="تفاصيل المتقدم" aria-hidden="true"></aside>
 
-<dialog id="settings">
-  <form method="dialog" id="settingsForm">
-    <h2>ربط جوجل شيت</h2>
-    <p class="small">الصق رابط الـ Web app من Google Apps Script والتوكن الناتج من دالة setup. بيتحفظوا على متصفحك أنت فقط ولا يرتفعوا لأي مكان.</p>
-    <label>رابط الـ Web app<input type="url" id="endpointInput" class="ltr" placeholder="https://script.google.com/macros/s/.../exec"></label>
-    <label>التوكن<input type="password" id="tokenInput" class="ltr" autocomplete="off"></label>
-    <div class="row">
-      <button class="btn primary" value="save">حفظ وتحميل</button>
-      <button class="btn" value="clear">مسح البيانات المحفوظة</button>
-      <button class="btn" value="cancel">إغلاق</button>
-    </div>
-  </form>
+<dialog id="confirmDlg">
+  <h2 id="confirmTitle"></h2>
+  <p id="confirmText" class="small"></p>
+  <div class="row">
+    <button class="btn primary" type="button" id="confirmYes">تأكيد</button>
+    <button class="btn" type="button" id="confirmNo">إلغاء</button>
+  </div>
 </dialog>
 
+<script src="config.js"></script>
 <script src="scoring.js"></script>
 <script src="demo-data.js"></script>
 <script src="app.js"></script>

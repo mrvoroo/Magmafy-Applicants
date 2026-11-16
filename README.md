@@ -1,35 +1,44 @@
 # Magmafy Applicants
 
 Private dashboard for reviewing media buyer applicants. Static site (HTML/CSS/JS), no build step.
-It reads the Google Sheet filled by the recruiting form (`Magmafy-Recruting-form`) and ranks every applicant.
+Data lives in a Google Sheet behind a Google Apps Script web app. **All access control is enforced by that
+script, not by this page.**
 
 ## Files
-- `index.html`, `app.js`: the dashboard (table, filters, detail drawer, status and notes)
-- `scoring.js`: the scoring rules (pure functions, easy to tune)
-- `demo-data.js`: fake applicants for the "بيانات تجريبية" button
-- `apps-script/Code.gs`: Google Apps Script backend (receives form posts, serves rows to the dashboard)
+- `index.html`, `app.js`, `config.js`: the dashboard (login, table, filters, detail drawer, close/open applications)
+- `scoring.js`: scoring rules (pure functions, easy to tune). `demo-data.js`: fake applicants
+- `apps-script/Code.gs`: the backend. `apps-script/test.js` and `e2e.js`: offline security and UI tests
 
-## Setup (once)
-1. Open https://script.google.com, create a project, paste `apps-script/Code.gs`.
-2. Run the `setup` function and approve permissions. It creates the sheet "Magmafy Applicants" and a secret token (see Executions / Logs).
-3. Deploy > New deployment > Web app. Execute as: Me. Who has access: Anyone. Copy the `/exec` URL.
-4. Put the URL in `SHEET_ENDPOINT` inside the form repo's `index.html`.
-5. Open this dashboard, press "ربط الشيت", paste the URL and the token. They are saved in your browser only.
+## Security model
+- Only the emails in the script property `ADMINS` can log in. They are **not** stored in this repo.
+- Login: 8-digit one-time code sent by email (valid 10 minutes, single use, stored only as a salted hash),
+  then a random 384-bit session token (stored only as a hash, valid 8 hours, max 3 per person).
+- Limits: 5 wrong guesses burn the code and lock that email for 15 minutes; 5 codes per email per hour;
+  40 code requests per hour in total. The answer to "send me a code" is identical for every email, so nobody can probe who is an admin.
+- Exact email match only: `name+tag@gmail.com`, dots, extra addresses or line breaks never match. Mail is sent only to the address from the `ADMINS` list.
+- Every private action (read applicants, save notes, close/open applications) re-checks the session on the server.
+- The old static token is deleted by `setup`. `doGet` returns nothing private.
+- Dashboard: strict Content-Security-Policy, no referrer, anti-framing, all applicant text rendered as text (never HTML),
+  session token kept in the tab's `sessionStorage` only (nothing in `localStorage`), auto logout after 30 idle minutes.
+- Spreadsheet formula injection is neutralised and every field has a size limit.
+- Notes and statuses are saved in the sheet (tab `Reviews`) so both reviewers see the same thing.
 
-## Scoring (100 points)
-Experience 20, platforms 10, monthly spend 15, furniture/e-commerce niche 10, Gulf market 10,
-results backed by numbers 15, tracking knowledge 10, diagnosis of a performance drop 10.
-Bands: 75+ excellent, 55-74 good, 35-54 average, below 35 weak.
-The score reads keywords, numbers and answer length. It is a first filter: it can be gamed by keyword lists,
-so the dashboard also flags short answers full of jargon, copied answers, and results without numbers.
-Always open the results link and judge the real work.
+Run the tests: `node apps-script/test.js` (79 checks) and `NODE_PATH=<jsdom> node apps-script/e2e.js`.
 
-## Documents check
-Flags a missing or malformed CV link, a missing results link, an invalid phone, a missing start date or rate,
-and warns about unknown link hosts, identical CV/results links, and Drive sharing permissions.
-It cannot open the links for you, so the "افتح" button lets you check each one.
+## Setup / update the backend
+1. script.google.com > your project > replace `Code.gs` with `apps-script/Code.gs`.
+2. Project Settings > Script properties > add `ADMINS` = `email1,email2` (only these two).
+3. Run `authorize` (approve the new "send email" permission), then run `setup`.
+4. Deploy > Manage deployments > pencil > Version: New version > Deploy. Keep the same `/exec` URL.
+5. Put the URL in `config.js` (`endpoint`) here, and in `SHEET_ENDPOINT` in the form repo.
 
-## Privacy
-This dashboard shows personal data of applicants. Keep this repo and its deployment private, or protect the
-page (for example with Cloudflare Access or basic auth), and never commit the sheet token. The token is only
-typed in the browser and never stored in this repo. Statuses and notes you write are saved in your browser only.
+Emergency: run `revokeAllSessions` to log everyone out, or `lockdown` to remove `ADMINS` as well.
+
+## Close applications
+The button "قفل باب التقديم" in the dashboard sets a flag on the server. The form then shows a message that
+applications are closed, and the server rejects any submission, even from a page that was already open.
+The same button reopens applications.
+
+## What the code cannot protect
+Anyone who can open the Google account that owns the sheet and script (or who you share the sheet with) can
+read the data directly. Keep that account on 2-step verification, do not share the sheet, and keep this repo private.

@@ -95,6 +95,14 @@ let pass = 0, fail = 0; const ok = (c, n) => { if (c) pass++; else { fail++; con
   const n1 = env.mails.length; await pg.click('#mSend'); await pg.waitForSelector('#confirmDlg[open]'); await pg.click('#confirmYes');
   await pg.waitForSelector('#mailDlg:not([open])', { state: 'attached' });
   ok(env.mails.length === n1 + 1 && env.mails[n1].to === 'friend@example.com', 'blank mail to a custom address sent');
+  // blank mail: insert a date/time and check the block appears
+  await pg.click('#newMailBtn'); await pg.waitForSelector('#mailDlg[open]');
+  ok(!(await pg.locator('#mWhen').isVisible()), 'blank mail has no date block until needed');
+  await pg.fill('#mBody', 'Meeting at '); await pg.locator('#mailDlg .insbar button', { hasText: 'الساعة والتوقيت' }).click();
+  await pg.locator('#mailDlg .insbar button', { hasText: 'يوم المقابلة' }).click();
+  ok(await pg.locator('#mWhen').isVisible(), 'inserting {date}/{time} reveals date, time and zone pickers in a blank mail');
+  ok((await pg.textContent('#mWhenNote')).includes('GMT+3'), 'blank mail states the time zone');
+  await pg.keyboard.press('Escape');
   // demo mode disables
   await pg.click('#demoBtn'); await pg.waitForTimeout(200);
   ok(await pg.locator('#newMailBtn').isDisabled(), 'comms disabled in demo mode');

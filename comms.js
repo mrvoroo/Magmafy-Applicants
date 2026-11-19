@@ -159,6 +159,20 @@
   function opt(v, t, sel) { return h('option', { value: v, text: t, selected: !!sel }); }
   function field(label, el, cls) { return h('label', { class: cls || '' }, h('span', { class: 'small', text: label }), el); }
 
+  function insertAt(id, text, after) {
+    var el = $(id), a = el.selectionStart == null ? el.value.length : el.selectionStart, b = el.selectionEnd == null ? a : el.selectionEnd;
+    el.value = el.value.slice(0, a) + text + el.value.slice(b);
+    el.focus(); el.selectionStart = el.selectionEnd = a + text.length;
+    after();
+  }
+  function insertBar(id, after) {
+    var bar = h('div', { class: 'insbar' }, h('span', { class: 'small', text: 'إدراج في النص:' }));
+    [['{name}', 'الاسم'], ['{date}', 'يوم المقابلة'], ['{time}', 'الساعة والتوقيت']].forEach(function (p) {
+      bar.appendChild(h('button', { type: 'button', class: 'tab', onclick: function () { insertAt(id, p[0], after); }, text: p[1] }));
+    });
+    return bar;
+  }
+
   var previewTimer = null;
   function schedulePreview(frameId, getParams, msgId) {
     clearTimeout(previewTimer);
@@ -225,6 +239,7 @@
         field('الموضوع', subj),
         field('العنوان الكبير داخل الرسالة (اختياري)', head),
         field('نص الرسالة', body),
+        insertBar('mBody', function () { refresh(); }),
         h('p', { class: 'small', text: 'سطر فاضي = فقرة جديدة. **كلمة** = غامق. سطور بـ 1. 2. 3. = خطوات. {name} {date} {time} بتتعوّض تلقائيًا.' }),
         h('label', { class: 'check', id: 'mStatusRow' }, st, h('span', { id: 'mStatusTxt' }))),
       h('div', { class: 'col' },
@@ -334,6 +349,7 @@
       field('لغة الرسالة', h('select', { id: 'wLang', onchange: function () { waTemplate(); } }, opt('ar', 'عربي', true), opt('en', 'English')))));
     dlg.appendChild(whenBlock('w', function () { waRefresh(); }));
     dlg.appendChild(field('نص الرسالة (تقدر تعدّله)', h('textarea', { id: 'wBody', rows: '6', maxlength: '1500', oninput: function () { waRefresh(); } })));
+    dlg.appendChild(insertBar('wBody', function () { waRefresh(); }));
     dlg.appendChild(h('div', { class: 'answer' }, h('div', { class: 'a-label' }, h('span', { text: 'اللي هيتبعت فعليًا' })), h('div', { class: 'a-text', id: 'wFinal' })));
     dlg.appendChild(h('p', { class: 'small', id: 'wPhone' }));
     dlg.appendChild(h('label', { class: 'check', id: 'wStatusRow' }, h('input', { type: 'checkbox', id: 'wSetStatus' }), h('span', { id: 'wStatusTxt' })));

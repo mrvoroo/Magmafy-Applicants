@@ -137,8 +137,10 @@ let pass = 0, fail = 0; const ok = (c, n) => { if (c) pass++; else { fail++; con
   await pg.click('#ivClose'); await pg.waitForSelector('.iv', { state: 'detached' });
   // ---- contract
   await pg.locator('#drawer button', { hasText: 'إنشاء العقد' }).click(); await pg.waitForSelector('.ct');
-  ok((await pg.inputValue('[data-k="p2.name"]')) === 'Omar Khaled' && (await pg.inputValue('[data-k="fee"]')) === '300' && (await pg.inputValue('[data-k="p1.rep"]')) === 'م. أحمد أشرف', 'contract is prefilled (applicant, interview fee, company rep)');
+  ok((await pg.inputValue('[data-k="p2.name"]')) === 'Omar Khaled' && (await pg.inputValue('[data-k="fee"]')) === '300' && (await pg.inputValue('[data-k="p1.rep"]')) === '' && (await pg.locator('[data-k="p1.rep"] option').allTextContents()).join('|') === 'اختر الممثل…|م. أحمد أشرف|م. عبدالله محمود', 'contract is prefilled (applicant, interview fee); the representative must be chosen from the two');
   ok((await pg.textContent('#ctPaper')).includes('300 دولار أمريكي') && (await pg.textContent('#ctPaper')).includes('Omar Khaled') && (await pg.textContent('#ctPaper')).includes('13. أحكام عامة'), 'paper shows fee, name and the 13 numbered clauses');
+  await pg.selectOption('[data-k="p1.rep"]', 'م. عبدالله محمود'); await pg.waitForTimeout(100);
+  ok((await pg.inputValue('[data-k="p1.title"]')) === 'شريك مؤسس' && (await pg.textContent('#ctPaper')).includes('ويمثلها م. عبدالله محمود'), 'choosing the representative fills his title and shows on the paper');
   await pg.fill('[data-k="fee"]', '200'); await pg.fill('[data-k="p2.name"]', '<b>Omar</b> Khaled');
   ok((await pg.textContent('#ctPaper')).includes('200 دولار') && (await pg.locator('#ctPaper b').count()) >= 1 && !(await pg.innerHTML('#ctPaper')).includes('<b>Omar</b>'), 'paper updates live and escapes HTML in names');
   await pg.fill('[data-k="p2.name"]', 'Omar Khaled');
@@ -155,7 +157,7 @@ let pass = 0, fail = 0; const ok = (c, n) => { if (c) pass++; else { fail++; con
   await pg.click('#ctSign'); await pg.waitForTimeout(150); await pg.click('#ctSign');
   await pg.waitForSelector('.ct-stamp', { timeout: 8000 }).catch(async (e) => { console.log('SIGN DEBUG:', await pg.textContent('#ctMsg'), '|', await pg.textContent('#ctSave')); throw e; });
   cd = JSON.parse(env.sheets.Contracts[1][1]);
-  ok(cd.status === 'signed' && /^[0-9a-f]{64}$/.test(cd.hash) && cd.signedBy === A && cd.sig.pts >= 15 && cd.terms.length === 14, 'signed contract stored with hash, signer and the full text (preamble + 13 clauses)');
+  ok(cd.p1.rep === 'م. عبدالله محمود' && cd.status === 'signed' && /^[0-9a-f]{64}$/.test(cd.hash) && cd.signedBy === A && cd.sig.pts >= 15 && cd.terms.length === 14, 'signed contract stored with hash, signer and the full text (preamble + 13 clauses)');
   ok(await pg.locator('#ctPaper .ct-sigsvg polyline').count() >= 1 && (await pg.locator('#ctForm').isHidden()) && (await pg.locator('#ctSignCard').isHidden()), 'signature drawn on paper, editing locked');
   ok((await pg.textContent('#ctPaper')).includes('بصمة العقد') && (await pg.textContent('#ctSt')).includes('موقّع'), 'signed state and fingerprint shown');
   ok(await pg.locator('.ct-stamp image').evaluate((i) => i.getAttribute('href') === 'logo-mark.webp'), 'stamp carries the Magmafy logo');

@@ -36,7 +36,7 @@
       payDays: 7, noticeDays: 14, replyHours: 24, nonSol: 12, start: todayISO(),
       platforms: 'ميتا (فيسبوك وإنستغرام)، جوجل، سناب شات، تيك توك',
       law: 'قوانين المملكة العربية السعودية',
-      p1: { entity: co.entity || 'ماجمافاي', rep: co.rep || '', title: co.title || '' },
+      p1: { entity: co.entity || 'ماجمافاي', rep: '', title: '' }, // the representative is chosen on the form, never assumed
       p2: { name: a.name || '', phone: a.phone || '', email: a.email || '', country: a.country || '' },
       terms: []
     };
@@ -225,7 +225,7 @@
     return '<label class="iv-f">' + label + '<input data-k="' + key + '" type="' + (type || 'text') + '"' + (extra || '') + '></label>';
   }
 
-  function shell() {
+  function shell(o) {
     var h = '<div class="iv-top"><div class="iv-top-in"><h2 id="ctH"></h2><span class="pill" id="ctSt"></span><span class="iv-save" id="ctSave" role="status"></span>' +
       '<button class="btn" type="button" id="ctPrint">طباعة / حفظ PDF</button><button class="btn" type="button" id="ctClose">إغلاق</button></div></div>';
     h += '<div class="iv-main ct-main"><div id="ctMsg" class="ct-msg" hidden></div>';
@@ -233,7 +233,7 @@
     h += '<div class="iv-card"><h3>أطراف العقد</h3><div class="iv-grid">' +
       field('اسم المتعاون (الطرف الثاني)', 'p2.name', 'text', ' maxlength="80"') + field('دولته', 'p2.country', 'text', ' maxlength="60"') +
       field('هاتفه', 'p2.phone', 'text', ' maxlength="30" dir="ltr"') + field('بريده الإلكتروني', 'p2.email', 'email', ' maxlength="100" dir="ltr"') +
-      field('ممثل ماجمافاي', 'p1.rep', 'text', ' maxlength="60"') + field('صفته', 'p1.title', 'text', ' maxlength="60"') +
+      repSelect(o) + field('صفته', 'p1.title', 'text', ' maxlength="60"') +
       field('اسم الكيان (الطرف الأول)', 'p1.entity', 'text', ' maxlength="100"') + field('رقم العقد', 'no', 'text', ' readonly dir="ltr"') + '</div></div>';
     h += '<div class="iv-card"><h3>الأجر والمدد</h3><div class="iv-grid">' +
       field('الأجر الشهري الثابت عن كل عميل', 'fee', 'text', ' inputmode="decimal" maxlength="9" dir="ltr"') +
@@ -253,6 +253,14 @@
     h += '<div class="iv-card" id="ctEndCard" hidden><h3>إنهاء العقد</h3><label class="iv-f">سبب الإنهاء (اختياري)<textarea id="ctEndWhy" maxlength="300"></textarea></label><div class="ct-actions"><button class="btn" type="button" id="ctEnd">إنهاء العقد</button></div></div>';
     h += '</div>';
     return h;
+  }
+
+  // who signs for Magmafy: a required choice from the configured representatives
+  function repsOf(o) { var r = o && o.company && o.company.reps; return Array.isArray(r) ? r.filter(function (x) { return x && x.name; }) : []; }
+  function repSelect(o) {
+    var h = '<label class="iv-f ct-rep">من يمثل ماجمافاي في العقد؟<select data-k="p1.rep"><option value="">اختر الممثل…</option>';
+    repsOf(o).forEach(function (r) { h += '<option value="' + esc(r.name) + '">' + esc(r.name) + '</option>'; });
+    return h + '</select></label>';
   }
 
   function getP(o, p) { var a = p.split('.'); for (var i = 0; i < a.length; i++) { if (o == null) return ''; o = o[a[i]]; } return o == null ? '' : o; }
@@ -285,7 +293,11 @@
   }
 
   function fillForm() {
-    $$all('[data-k]', S.root).forEach(function (el) { el.value = getP(S.doc, el.getAttribute('data-k')); });
+    $$all('[data-k]', S.root).forEach(function (el) {
+      var v = getP(S.doc, el.getAttribute('data-k'));
+      if (el.tagName === 'SELECT' && v && !Array.prototype.some.call(el.options, function (o) { return o.value === v; })) { var op = document.createElement('option'); op.value = v; op.textContent = v; el.appendChild(op); } // a saved name that is no longer in the list
+      el.value = v;
+    });
   }
   function $$all(s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); }
 
@@ -379,7 +391,12 @@
       el.addEventListener(evt, function () {
         var k = el.getAttribute('data-k'), v = el.value;
         if (NUMK[k]) { var n = parseInt(v, 10), m = NUMK[k]; v = isFinite(n) ? Math.max(m[0], Math.min(m[1], n)) : m[2]; }
-        setP(S.doc, k, v); renderPaper(); scheduleDraft();
+        setP(S.doc, k, v);
+        if (k === 'p1.rep') { // picking the representative fills in his title
+          var rr = repsOf(S.opts).filter(function (x) { return x.name === v; })[0];
+          if (rr) { S.doc.p1.title = rr.title || ''; $('[data-k="p1.title"]', r).value = S.doc.p1.title; }
+        }
+        renderPaper(); scheduleDraft();
       });
     });
     S.pad = SigPad($('#ctPad', r), function () { if (S.raf) return; S.raf = requestAnimationFrame(function () { if (!S) return; S.raf = 0; renderPaper(); }); });
@@ -398,7 +415,7 @@
     if (S) close(true);
     var root = document.createElement('div');
     root.className = 'iv ct'; root.setAttribute('role', 'dialog'); root.setAttribute('aria-label', 'العقد');
-    root.innerHTML = shell();
+    root.innerHTML = shell(opts);
     document.body.appendChild(root); document.body.classList.add('ct-open');
     S = { opts: opts, root: root, status: 'none', doc: defaults(opts), timer: null, seq: 0, pad: null };
     wire(); fillForm(); refreshUI();

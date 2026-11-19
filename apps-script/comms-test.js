@@ -9,6 +9,23 @@ ok(p('0501234567', 'Saudi Arabia').digits === '966501234567', 'local Saudi numbe
 ok(!p('0501234567', '').ok, 'local number with unknown country refused');
 ok(!p('123', 'مصر').ok && !p('', '').ok && !p(null, '').ok, 'too short / empty refused');
 ok(p('٠١٠٠١٢٣٤٥٦٧', 'مصر').digits === '201001234567', 'Arabic-Indic digits understood');
+// numbers typed the ways people really type them (the old code sent some of these to wa.me as "+1")
+ok(p('1001234567', 'مصر').digits === '201001234567', 'Egyptian number typed without the 0 (was read by WhatsApp as +1)');
+ok(p('+20 01001234567', 'مصر').digits === '201001234567' && p('+2001001234567', '').digits === '201001234567', 'extra 0 after +20 removed');
+ok(p('2001001234567', 'مصر').digits === '201001234567' && p('201001234567', 'مصر').digits === '201001234567', '20 + 0... and 20 + number without plus');
+ok(p('0020 100 123 4567', '').digits === '201001234567' && p('(+20) 100-123-4567', 'مصر').digits === '201001234567', '00 prefix, brackets and dashes');
+ok(p('01001234567', 'Egypt').digits === '201001234567' && p('01001234567', 'جمهورية مصر العربية').digits === '201001234567' && p('01001234567', 'Cairo').digits === '201001234567', 'country spelled many ways');
+ok(p('501234567', 'السعودية').digits === '966501234567' && p('0501234567', 'KSA').digits === '966501234567' && p('+966 50 123 4567', '').digits === '966501234567', 'Saudi: with and without 0 / code');
+ok(p('+966 050 123 4567', '').digits === '966501234567', 'Saudi: extra 0 after +966');
+ok(p('0501234567', 'الإمارات').digits === '971501234567' && p('50 123 4567', 'Dubai').digits === '971501234567', 'UAE');
+ok(p('+44 7911 123456', 'مصر').digits === '447911123456' && p('+1 415 555 2671', 'مصر').digits === '14155552671', 'a foreign number keeps its own code whatever the country says');
+ok(p('07911123456', 'United Kingdom').digits === '447911123456' && p('3331234567', 'Italy').digits === '393331234567' && p('03331234567', 'Italy').digits === '3903331234567', 'UK, Italy keeps its 0');
+ok(p('10012345', 'مصر').ok === false && p('+20 100', '').ok === false, 'wrong length refused');
+ok(p('+20 100 123 456', '').ok && /عدد أرقامه/.test(p('+20 100 123 456', '').warn), 'odd length is allowed but flagged');
+ok(u.countryOf('Romania') === null && u.countryOf('Oman').cc === '968' && u.countryOf('سلطنة عمان').cc === '968' && u.countryOf('Indonesia').cc === '62', 'country names matched on whole words (Romania is not Oman)');
+const pe = u.parsePhone('1001234567', u.COUNTRIES.find((c) => c.cc === '20'), true);
+ok(pe.digits === '201001234567' && !pe.warn, 'picked country: no assumption warning');
+ok(u.parsePhone('01001234567', u.COUNTRIES.find((c) => c.cc === '966'), true).digits === '9661001234567', 'picked country wins for a local number');
 const w = u.interviewWhen('2026-11-26', '16:00', 'Asia/Riyadh', 'en', 'Africa/Cairo');
 ok(w.time.includes('4:00 PM') && w.time.includes('GMT+3') && w.time.includes('3:00 PM') && w.time.includes('GMT+2'), 'Riyadh 16:00 = Cairo 15:00 in November: ' + w.time);
 ok(u.interviewWhen('2026-07-20', '16:00', 'Asia/Riyadh', 'en', 'Africa/Cairo').time.includes('4:00 PM Egypt time (GMT+3)'), 'Egypt daylight saving handled in July');

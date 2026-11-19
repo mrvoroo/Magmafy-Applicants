@@ -266,10 +266,10 @@ var DEFAULT_TEMPLATES = {
       body: ['أهلًا {name}،',
         'يسعدنا نحدد معاك ميعاد المقابلة:',
         '**اليوم:** {date}\n**الساعة:** {time}',
-        'هنتواصل معاك على واتساب في الميعاد ده. لو مش مناسب، رد علينا بميعاد بديل قبلها بوقت كافي.',
+        'هنبعتلك لينك جوجل ميت قبل الميعاد بوقت مناسب. لو عندك مشكلة في الموعد عرفنا.',
         'ياريت تجهّز نتايجك السابقة وتكون جاهز تشرحها بالأرقام.',
         'بالتوفيق،\n**فريق Magmafy**'].join('\n\n'),
-      wa: 'أهلًا {name}، معاك فريق Magmafy. حددنا ميعاد المقابلة:\nاليوم: {date}\nالساعة: {time}\nهنكلمك على واتساب في الميعاد ده. لو مش مناسب قولنا على ميعاد بديل.'
+      wa: 'أهلًا {name}، معاك فريق Magmafy. حددنا ميعاد المقابلة:\nاليوم: {date}\nالساعة: {time}\nهنبعتلك لينك جوجل ميت قبل الميعاد بوقت مناسب.\nلو عندك مشكلة في الموعد عرفني.'
     },
     en: {
       subject: 'Your interview with Magmafy',
@@ -277,10 +277,10 @@ var DEFAULT_TEMPLATES = {
       body: ['Hello {name},',
         'We are glad to set a time for your interview:',
         '**Day:** {date}\n**Time:** {time}',
-        'We will contact you on WhatsApp at that time. If it does not suit you, please reply with an alternative well before it.',
+        'We will send you a Google Meet link a suitable time before the interview. If you have a problem with the time, please let us know.',
         'Please have your past results ready and be prepared to walk us through the numbers.',
         'Good luck,\n**The Magmafy team**'].join('\n\n'),
-      wa: "Hello {name}, this is the Magmafy team. Your interview is set:\nDay: {date}\nTime: {time}\nWe'll contact you on WhatsApp then. If it doesn't suit you, tell us an alternative time."
+      wa: "Hello {name}, this is the Magmafy team. Your interview is set:\nDay: {date}\nTime: {time}\nWe'll send you a Google Meet link a suitable time before the interview.\nIf you have a problem with the time, let me know."
     }
   },
   accepted: {

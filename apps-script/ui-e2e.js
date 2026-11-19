@@ -64,7 +64,14 @@ let pass = 0, fail = 0; const ok = (c, n) => { if (c) pass++; else { fail++; con
   // WhatsApp
   await pg.locator('#drawer button', { hasText: 'رسالة واتساب' }).click();
   await pg.waitForSelector('#waDlg[open]');
-  ok((await pg.textContent('#wPhone')).includes('+201001234567') && (await pg.textContent('#wPhone')).includes('محلي'), 'local number normalised with warning');
+  ok((await pg.textContent('#wPhone')).includes('+201001234567') && (await pg.inputValue('#wCc')) === '20' && (await pg.inputValue('#wNum')) === '1001234567', 'local Egyptian number: code and number split into editable boxes');
+  await pg.selectOption('#wCc', '966'); await pg.fill('#wNum', '0501234567'); await pg.waitForTimeout(150);
+  ok((await pg.textContent('#wPhone')).includes('+966501234567'), 'changing the country code and number updates the final number');
+  await pg.fill('#wNum', '+44 7911 123456'); await pg.waitForTimeout(150);
+  ok((await pg.textContent('#wPhone')).includes('+447911123456'), 'a typed international number overrides the chosen code');
+  await pg.fill('#wNum', '12'); await pg.waitForTimeout(150);
+  ok(await pg.locator('#wOpen').isDisabled(), 'an invalid number disables the send button');
+  await pg.selectOption('#wCc', '20'); await pg.fill('#wNum', '1001234567'); await pg.waitForTimeout(150);
   await pg.selectOption('#wTpl', 'accepted'); await pg.waitForTimeout(200);
   ok((await pg.textContent('#wFinal')).includes('سارة'), 'WhatsApp text filled with the name');
   await pg.selectOption('#wTpl', 'interview'); await pg.fill('#wDate', '2026-11-26'); await pg.fill('#wTime', '16:00');
@@ -130,7 +137,7 @@ let pass = 0, fail = 0; const ok = (c, n) => { if (c) pass++; else { fail++; con
   await pg.click('#ivClose'); await pg.waitForSelector('.iv', { state: 'detached' });
   // ---- contract
   await pg.locator('#drawer button', { hasText: 'إنشاء العقد' }).click(); await pg.waitForSelector('.ct');
-  ok((await pg.inputValue('[data-k="p2.name"]')) === 'Omar Khaled' && (await pg.inputValue('[data-k="fee"]')) === '300' && (await pg.inputValue('[data-k="p1.rep"]')) === 'أشرف', 'contract is prefilled (applicant, interview fee, company rep)');
+  ok((await pg.inputValue('[data-k="p2.name"]')) === 'Omar Khaled' && (await pg.inputValue('[data-k="fee"]')) === '300' && (await pg.inputValue('[data-k="p1.rep"]')) === 'م. أحمد أشرف', 'contract is prefilled (applicant, interview fee, company rep)');
   ok((await pg.textContent('#ctPaper')).includes('300 دولار أمريكي') && (await pg.textContent('#ctPaper')).includes('Omar Khaled') && (await pg.textContent('#ctPaper')).includes('13. أحكام عامة'), 'paper shows fee, name and the 13 numbered clauses');
   await pg.fill('[data-k="fee"]', '200'); await pg.fill('[data-k="p2.name"]', '<b>Omar</b> Khaled');
   ok((await pg.textContent('#ctPaper')).includes('200 دولار') && (await pg.locator('#ctPaper b').count()) >= 1 && !(await pg.innerHTML('#ctPaper')).includes('<b>Omar</b>'), 'paper updates live and escapes HTML in names');

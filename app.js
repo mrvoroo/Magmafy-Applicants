@@ -417,6 +417,8 @@
   }
 
   // ---------- contract ----------
+  // the contract shows the phone in full international form when it can be worked out
+  function contractPhone(r) { var u = window.MagmafyComms && window.MagmafyComms.util, p = u && u.normalizePhone(r.phone, r.country); return p && p.ok ? '+' + p.digits : r.phone; }
   function contractInfo(id) { return state.contracts[id] || null; }
   function openContract(id) {
     var r = state.rows.filter(function (x) { return x.id === id; })[0];
@@ -424,7 +426,7 @@
     var iv = interviewData(id);
     window.MagmafyContract.open({
       id: id, live: state.source === 'server', company: CFG.company || {}, summary: contractInfo(id), fee: iv && iv.fee,
-      applicant: { name: r.name, phone: r.phone, email: r.email, country: r.country },
+      applicant: { name: r.name, phone: contractPhone(r), email: r.email, country: r.country },
       load: function () { return api('getContract', { token: ss.get(), id: id }); },
       save: function (op, doc) { return api('saveContract', { token: ss.get(), id: id, op: op, data: JSON.stringify(doc) }); },
       onChange: function (sum) { if (sum) state.contracts[id] = sum; },

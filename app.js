@@ -104,7 +104,7 @@
   }
 
   function clearData() {
-    state.rows = []; state.evals = {}; state.dups = {}; state.reviews = {}; state.interviews = {}; state.contracts = {}; state.source = 'none';
+    state.rows = []; state.evals = {}; state.dups = {}; state.reviews = {}; state.interviews = {}; state.contracts = {}; state.cs = {}; state.csOn = false; state.source = 'none';
     state.selected = null; state.me = ''; state.open = null; state.used = null; state.cap = null; state.msgs = {}; state.sender = '';
     if (window.MagmafyComms) window.MagmafyComms.reset();
     closeDrawer(true);
@@ -177,6 +177,7 @@
       banner(keep ? 'ok' : '', keep);
       setRows(j.rows || [], 'server');
       renderGate();
+      loadCaseStudy();
       return true;
     }).catch(function (e) {
       if (e && e.message === 'auth') return false;
@@ -184,6 +185,23 @@
       return false;
     });
   }
+
+  // Case Study answers live in a separate backend; the dashboard server looks them up by phone number.
+  function loadCaseStudy() {
+    var t = ss.get();
+    if (!t) return;
+    api('caseStudy', { token: t }).then(function (j) {
+      if (!j || !j.ok) return;
+      state.csOn = !!j.enabled; state.cs = j.map || {};
+      if (state.selected) renderDrawer(state.selected);
+    }).catch(function () {});
+  }
+  var CS_BASE = 'https://magmafyogp.com/case-study/';
+  function csFormLink(r) {
+    var digits = String(r.phone || '').replace(/[^\d]/g, '');
+    return CS_BASE + (digits.length >= 8 ? '?p=' + digits : '');
+  }
+  function csViewLink(hit) { return CS_BASE + 'view/?id=' + encodeURIComponent(hit.id); }
 
   var saveTimers = {};
   function saveReview(id) {
@@ -537,6 +555,29 @@
     d.appendChild(ctBox);
     d.appendChild(h('button', { class: 'btn primary', type: 'button', onclick: function () { openContract(id); }, text: ct && (ct.status === 'signed' || ct.status === 'ended') ? 'عرض العقد' : ct && ct.status === 'draft' ? 'كمّل العقد' : 'إنشاء العقد' }));
     if (!live) d.appendChild(h('p', { class: 'small', text: 'في البيانات التجريبية العقد للمعاينة فقط.' }));
+
+    if (live && state.csOn) {
+      d.appendChild(h('h3', { text: 'الـ Case Study' }));
+      var cs = state.cs[id], csBox = h('div', { class: 'iv-sum' });
+      if (cs) {
+        csBox.appendChild(h('span', { class: 'pill ok', text: 'سلّم الـ Case Study' }));
+        csBox.appendChild(h('span', { class: 'small', text: fmtWhen(cs.at) }));
+        d.appendChild(csBox);
+        d.appendChild(h('a', { class: 'btn primary', href: csViewLink(cs), target: '_blank', rel: 'noopener noreferrer', text: 'عرض إجابات الـ Case Study' }));
+        d.appendChild(h('p', { class: 'small', text: 'الصفحة بتطلب مفتاح الدخول مرة واحدة.' }));
+      } else {
+        csBox.appendChild(h('span', { class: 'pill warn', text: 'لسه ماسلّمش' }));
+        d.appendChild(csBox);
+        var copyBtn = h('button', { class: 'btn primary', type: 'button', text: 'نسخ رابط الـ Case Study', onclick: function () {
+          var link = csFormLink(r);
+          var done = function () { copyBtn.textContent = 'اتنسخ ✓'; setTimeout(function () { copyBtn.textContent = 'نسخ رابط الـ Case Study'; }, 2000); };
+          if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(link).then(done).catch(function () { window.prompt('انسخ الرابط', link); });
+          else window.prompt('انسخ الرابط', link);
+        } });
+        d.appendChild(copyBtn);
+        d.appendChild(h('p', { class: 'small', text: 'الرابط فيه رقم المتقدم عشان الإجابات تتربط بيه تلقائي.' }));
+      }
+    }
 
     d.appendChild(h('h3', { text: 'إجاباته كاملة' }));
     var qs = [['platforms', 'المنصات اللي أدارها بميزانية حقيقية'], ['spend', 'أعلى ميزانية شهرية أدارها'], ['niche', 'خبرته في الأثاث والديكور والمتاجر'], ['gulf', 'خبرته مع السوق السعودي والخليجي'], ['result', 'أفضل نتيجة حققها لعميل'], ['tracking', 'إزاي بيتأكد إن التتبع سليم'], ['drop', 'أول ٣ حاجات بيفحصها لما الأداء يهبط'], ['more', 'أي شيء تاني حب يقوله']];

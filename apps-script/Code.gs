@@ -103,6 +103,7 @@ function doPost(e) {
       case 'sendMail': return json_(authed_(data, sendMail_));
       case 'logMessage': return json_(authed_(data, logMessage_));
       case 'setOpen': return json_(authed_(data, setOpen_));
+      case 'caseStudy': return json_(authed_(data, caseStudy_));
       case 'logout': return json_(logout_(data));
       default: return json_({ ok: false, error: 'invalid' });
     }
@@ -123,6 +124,7 @@ function doGet(e) {
 
 function authorize() {
   MailApp.getRemainingDailyQuota(); // triggers the permission prompt for sending email
+  UrlFetchApp.fetch('https://script.google.com/', { muteHttpExceptions: true }); // permission to call the Case Study backend
 }
 
 function setup() {
@@ -845,6 +847,47 @@ function getApplicants_(data, email) {
     reviews[String(r[0])] = { status: r[1], note: r[2], by: r[3], at: r[4] instanceof Date ? r[4].toISOString() : r[4] };
   });
   return { ok: true, rows: rows, reviews: reviews, interviews: interviews_(), contracts: contracts_(), msgs: messagesByApplicant_(), sender: senderEmail_(), open: !isClosed_(), me: email, used: usedCount_(sheet_()), cap: maxApps_() };
+}
+
+// ---- Case Study answers (kept in a separate Apps Script; the key never leaves the server)
+// Script properties: CASE_STUDY_URL (its /exec URL) and CASE_STUDY_KEY (its ADMIN_KEY).
+// Applicants are matched by phone: last 9 digits, leading zeros ignored (same rule as the other script).
+function csKey_(p) {
+  var d = String(p == null ? '' : p).replace(/\D/g, '');
+  return d.length >= 8 ? d.slice(-9).replace(/^0+/, '') : '';
+}
+
+function caseStudy_(data, email) {
+  var url = props_().getProperty('CASE_STUDY_URL'), key = props_().getProperty('CASE_STUDY_KEY');
+  if (!url || !key) return { ok: true, enabled: false, map: {} };
+  var values = sheet_().getDataRange().getValues();
+  var head = values.shift();
+  var idI = head.indexOf('id'), phI = head.indexOf('phone');
+  var byKey = {}, phones = [];
+  values.forEach(function (r) {
+    var k = csKey_(r[phI]);
+    if (!k) return;
+    (byKey[k] = byKey[k] || []).push(String(r[idI]));
+    phones.push(String(r[phI]));
+  });
+  if (!phones.length) return { ok: true, enabled: true, map: {} };
+  var out = {};
+  try {
+    var res = UrlFetchApp.fetch(url, {
+      method: 'post', contentType: 'text/plain;charset=utf-8', followRedirects: true, muteHttpExceptions: true,
+      payload: JSON.stringify({ action: 'lookup', phones: phones, key: key })
+    });
+    var j = JSON.parse(res.getContentText());
+    if (!j || !j.ok) return { ok: true, enabled: true, failed: true, map: {} };
+    Object.keys(j.results || {}).forEach(function (k) {
+      var hit = j.results[k], id = hit && /^[\w-]{8,64}$/.test(String(hit.id)) ? String(hit.id) : '';
+      if (!id) return;
+      (byKey[k] || []).forEach(function (appId) { out[appId] = { id: id, at: String(hit.submittedAt || '').slice(0, 30) }; });
+    });
+  } catch (err) {
+    return { ok: true, enabled: true, failed: true, map: {} };
+  }
+  return { ok: true, enabled: true, map: out };
 }
 
 function saveReview_(data, email) {

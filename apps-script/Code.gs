@@ -40,6 +40,10 @@ var COLUMNS = [
   'niche', 'gulf', 'result', 'tracking', 'drop', 'cv', 'work', 'avail', 'rate', 'more', 'email', 'lang'
 ];
 var REVIEW_COLUMNS = ['id', 'status', 'note', 'updatedBy', 'updatedAt'];
+var INTERVIEW_SHEET = 'Interviews';
+var INTERVIEW_COLUMNS = ['id', 'data', 'updatedBy', 'updatedAt'];
+var MAX_INTERVIEW_JSON = 20000;
+var INTERVIEW_DECISIONS = ['', 'trial', 'main', 'backup', 'reject'];
 var STATUSES = ['جديد', 'تم التواصل', 'مقابلة', 'مقبول', 'مرفوض'];
 var TEMPLATE_SHEET = 'Templates';
 var TEMPLATE_COLUMNS = ['key', 'lang', 'subject', 'headline', 'body', 'wa', 'updatedBy', 'updatedAt'];
@@ -85,6 +89,7 @@ function doPost(e) {
       case 'verifyCode': return json_(verifyCode_(data));
       case 'getApplicants': return json_(authed_(data, getApplicants_));
       case 'saveReview': return json_(authed_(data, saveReview_));
+      case 'saveInterview': return json_(authed_(data, saveInterview_));
       case 'getTemplates': return json_(authed_(data, getTemplates_));
       case 'saveTemplate': return json_(authed_(data, saveTemplate_));
       case 'resetTemplate': return json_(authed_(data, resetTemplate_));
@@ -133,6 +138,7 @@ function setup() {
   reviewsSheet_();
   templatesSheet_();
   messagesSheet_();
+  interviewsSheet_();
   props.deleteProperty('TOKEN'); // the old static token no longer exists anywhere
   Logger.log('Sheet: ' + ss.getUrl());
   Logger.log('Owner notifications: ' + (normEmail_(props_().getProperty('NOTIFY_EMAIL')) ? 'on' : 'OFF (add the NOTIFY_EMAIL property)'));
@@ -831,7 +837,7 @@ function getApplicants_(data, email) {
   rv.forEach(function (r) {
     reviews[String(r[0])] = { status: r[1], note: r[2], by: r[3], at: r[4] instanceof Date ? r[4].toISOString() : r[4] };
   });
-  return { ok: true, rows: rows, reviews: reviews, msgs: messagesByApplicant_(), sender: senderEmail_(), open: !isClosed_(), me: email, used: usedCount_(sheet_()), cap: maxApps_() };
+  return { ok: true, rows: rows, reviews: reviews, interviews: interviews_(), msgs: messagesByApplicant_(), sender: senderEmail_(), open: !isClosed_(), me: email, used: usedCount_(sheet_()), cap: maxApps_() };
 }
 
 function saveReview_(data, email) {
@@ -840,6 +846,74 @@ function saveReview_(data, email) {
   var status = STATUSES.indexOf(data.status) !== -1 ? data.status : STATUSES[0];
   upsertReview_(id, status, clean_(data.note, 2000), email);
   return { ok: true };
+}
+
+// ---- interview checklist (one JSON document per applicant, sanitised field by field)
+function interviewsSheet_() { return sheetWithHeader_(INTERVIEW_SHEET, INTERVIEW_COLUMNS); }
+
+function pickMap_(src, valueFn, keyRe, maxKeys) {
+  var out = {}, n = 0;
+  if (!src || typeof src !== 'object' || Array.isArray(src)) return out;
+  Object.keys(src).forEach(function (k) {
+    if (n >= maxKeys || !keyRe.test(k)) return;
+    var v = valueFn(src[k]);
+    if (v !== undefined) { out[k] = v; n++; }
+  });
+  return out;
+}
+function boolV_(v) { return v === true ? true : undefined; }
+function scoreV_(v) { return (typeof v === 'number' && v >= 0 && v <= 5 && v === Math.floor(v)) ? v : undefined; }
+function textV_(max) { return function (v) { return typeof v === 'string' && v ? v.slice(0, max) : undefined; }; }
+function numStr_(v) { v = v == null ? '' : String(v).trim(); return /^\d{1,6}(\.\d{1,2})?$/.test(v) ? v : ''; }
+
+function sanitizeInterview_(o) {
+  var keyRe = /^[a-z][a-z0-9]{0,7}$/;
+  return {
+    v: 1,
+    fee: numStr_(o.fee),
+    cap: numStr_(o.cap),
+    checks: pickMap_(o.checks, boolV_, keyRe, 40),
+    flags: pickMap_(o.flags, boolV_, keyRe, 20),
+    prep: pickMap_(o.prep, boolV_, keyRe, 20),
+    pitch: pickMap_(o.pitch, boolV_, keyRe, 20),
+    close: pickMap_(o.close, boolV_, keyRe, 20),
+    ratings: pickMap_(o.ratings, scoreV_, keyRe, 20),
+    trial: pickMap_(o.trial, scoreV_, keyRe, 20),
+    notes: pickMap_(o.notes, textV_(1000), keyRe, 40),
+    decision: INTERVIEW_DECISIONS.indexOf(o.decision) !== -1 ? o.decision : '',
+    gen: typeof o.gen === 'string' ? o.gen.slice(0, 1500) : '',
+    final: typeof o.final === 'string' ? o.final.slice(0, 1500) : ''
+  };
+}
+
+function saveInterview_(data, email) {
+  var id = String(data.id == null ? '' : data.id);
+  if (!/^[\w-]{1,40}$/.test(id)) return { ok: false, error: 'invalid' };
+  var raw = typeof data.data === 'string' ? data.data : '';
+  if (!raw || raw.length > MAX_INTERVIEW_JSON) return { ok: false, error: 'invalid' };
+  var obj;
+  try { obj = JSON.parse(raw); } catch (e) { return { ok: false, error: 'invalid' }; }
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return { ok: false, error: 'invalid' };
+  var json = JSON.stringify(sanitizeInterview_(obj)); // starts with "{", so a spreadsheet never reads it as a formula
+  withLock_(function () {
+    var sh = interviewsSheet_(), ids = sh.getRange(1, 1, Math.max(sh.getLastRow(), 1), 1).getValues();
+    var row = -1;
+    for (var i = 1; i < ids.length; i++) if (String(ids[i][0]) === id) { row = i + 1; break; }
+    var vals = [id, json, email, new Date()];
+    if (row === -1) sh.appendRow(vals); else sh.getRange(row, 1, 1, vals.length).setValues([vals]);
+  });
+  return { ok: true };
+}
+
+function interviews_() {
+  var rows = interviewsSheet_().getDataRange().getValues(), out = {};
+  rows.shift();
+  rows.forEach(function (r) {
+    var d = null;
+    try { d = JSON.parse(String(r[1])); } catch (e) { d = null; }
+    if (d && typeof d === 'object') out[String(r[0])] = { data: d, by: r[2], at: r[3] instanceof Date ? r[3].toISOString() : r[3] };
+  });
+  return out;
 }
 
 // note === null keeps the existing note (used when a message changes the status automatically)

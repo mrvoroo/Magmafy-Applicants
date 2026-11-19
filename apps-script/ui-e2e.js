@@ -9,7 +9,7 @@ const env = makeEnv(A + ',' + B);
 env.post({ action: 'submit', name: 'سارة أحمد', phone: '01001234567', email: 'sara@example.com', country: 'مصر', years: 'اكثر من 5 سنوات', rate: '150$ لكل عميل', lang: 'ar' });
 env.post({ action: 'submit', name: 'Omar Khaled', phone: '+966501234567', email: 'omar@example.com', country: 'Saudi Arabia', years: '3 إلى 5 سنوات', lang: 'en' });
 env.mails.length = 0;
-const types = { '.html': 'text/html', '.js': 'text/javascript', '.png': 'image/png', '.webp': 'image/webp', '.ico': 'image/x-icon' };
+const types = { '.html': 'text/html', '.css': 'text/css', '.js': 'text/javascript', '.png': 'image/png', '.webp': 'image/webp', '.ico': 'image/x-icon' };
 const srv = http.createServer((q, r) => { let p = q.url.split('?')[0]; if (p === '/') p = '/index.html'; const f = path.join(root, p); if (!fs.existsSync(f)) { r.writeHead(404); return r.end(); } r.writeHead(200, { 'content-type': types[path.extname(f)] || 'application/octet-stream' }); r.end(fs.readFileSync(f)); }).listen(8099);
 let pass = 0, fail = 0; const ok = (c, n) => { if (c) pass++; else { fail++; console.log('FAIL:', n); } };
 (async () => {
@@ -103,6 +103,32 @@ let pass = 0, fail = 0; const ok = (c, n) => { if (c) pass++; else { fail++; con
   ok(await pg.locator('#mWhen').isVisible(), 'inserting {date}/{time} reveals date, time and zone pickers in a blank mail');
   ok((await pg.textContent('#mWhenNote')).includes('GMT+3'), 'blank mail states the time zone');
   await pg.keyboard.press('Escape');
+  // ---- interview checklist
+  if (await pg.locator('#drawer.open').count()) { await pg.locator('#drawer .close').click(); await pg.waitForTimeout(300); }
+  await pg.locator('#tbody tr', { hasText: 'Omar' }).click();
+  await pg.locator('#drawer button', { hasText: 'ابدأ المقابلة' }).click();
+  await pg.waitForSelector('.iv');
+  ok(await pg.locator('#ivRisk').isVisible(), 'risk flags bar is visible from the start');
+  await pg.locator('[data-bind="checks.q1"]').check();
+  await pg.fill('[data-bind="notes.q1"]', '=HYPERLINK("x")<b>hi</b>');
+  for (const [k, v] of [['exp', 5], ['niche', 4], ['gulf', 4], ['track', 5], ['clear', 5], ['commit', 5], ['bridge', 5], ['price', 3]]) await pg.click('[data-rate="' + k + '"][data-val="' + v + '"]');
+  ok((await pg.textContent('#ivScore')) === '90', 'interview score computed');
+  await pg.fill('[data-bind="fee"]', '300'); await pg.fill('[data-bind="cap"]', '250');
+  ok((await pg.textContent('#ivFee')).includes('50'), 'fee above cap is flagged');
+  await pg.locator('[data-bind="flags.f2"]').check();
+  ok((await pg.textContent('#ivBand')).includes('رفض') && (await pg.textContent('#ivRiskN')) === '1', 'a red flag overrides the score');
+  await pg.waitForFunction(() => document.getElementById('ivSave').textContent === 'محفوظ');
+  const stored = JSON.parse(env.sheets.Interviews[1][1]);
+  ok(stored.ratings.exp === 5 && stored.flags.f2 === true && stored.fee === '300', 'interview reached the server sheet');
+  ok(env.sheets.Interviews[1][0] !== undefined && env.sheets.Interviews.length === 2, 'one row per applicant');
+  ok((await pg.locator('.iv-q b').count()) === 0, 'note text is never rendered as HTML');
+  await pg.click('#ivClose'); await pg.waitForSelector('.iv', { state: 'detached' });
+  ok((await pg.textContent('#drawer')).includes('90/100'), 'drawer shows interview summary after closing');
+  ok((await pg.textContent('#tbody')).includes('مقابلة 90'), 'table shows interview score');
+  await pg.locator('#drawer button', { hasText: 'كمّل المقابلة' }).click(); await pg.waitForSelector('.iv');
+  ok((await pg.inputValue('[data-bind="notes.q1"]')) === '=HYPERLINK("x")<b>hi</b>' && await pg.locator('[data-bind="flags.f2"]').isChecked(), 'reopening restores notes and flags');
+  await pg.click('#ivClose'); await pg.waitForSelector('.iv', { state: 'detached' });
+  await pg.locator('#drawer .close').click(); await pg.waitForTimeout(300);
   // demo mode disables
   await pg.click('#demoBtn'); await pg.waitForTimeout(200);
   ok(await pg.locator('#newMailBtn').isDisabled(), 'comms disabled in demo mode');

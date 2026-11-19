@@ -16,7 +16,7 @@
   var SESSION_KEY = 'mg_session'; // session token lives in this tab only, never in localStorage
 
   var state = {
-    rows: [], evals: {}, dups: {}, reviews: {}, source: 'none', // 'server' | 'demo' | 'file' | 'none'
+    rows: [], evals: {}, dups: {}, reviews: {}, interviews: {}, source: 'none', // 'server' | 'demo' | 'file' | 'none'
     sortKey: 'score', sortDir: -1, band: '', selected: null,
     open: null, me: '', used: null, cap: null, msgs: {}, sender: ''
   };
@@ -104,7 +104,7 @@
   }
 
   function clearData() {
-    state.rows = []; state.evals = {}; state.dups = {}; state.reviews = {}; state.source = 'none';
+    state.rows = []; state.evals = {}; state.dups = {}; state.reviews = {}; state.interviews = {}; state.source = 'none';
     state.selected = null; state.me = ''; state.open = null; state.used = null; state.cap = null; state.msgs = {}; state.sender = '';
     if (window.MagmafyComms) window.MagmafyComms.reset();
     closeDrawer(true);
@@ -170,6 +170,7 @@
       if (!j || !j.ok) { banner('error', 'تعذّر تحميل البيانات. حاول التحديث.'); return false; }
       state.me = j.me || '';
       state.reviews = j.reviews || {};
+      state.interviews = j.interviews || {};
       state.open = j.open; state.used = j.used; state.cap = j.cap; state.msgs = j.msgs || {}; state.sender = j.sender || '';
       setMe(state.me);
       banner(keep ? 'ok' : '', keep);
@@ -369,7 +370,7 @@
       var e = state.evals[r.id];
       var tr = h('tr', { tabindex: '0', 'aria-selected': state.selected === r.id ? 'true' : 'false', onclick: function () { openDrawer(r.id); }, onkeydown: function (ev) { if (ev.key === 'Enter') openDrawer(r.id); } },
         h('td', { class: 'rank', text: i + 1 }),
-        h('td', null, h('b', { text: r.name || '(بدون اسم)' }), h('div', { class: 'small', text: r.country || '' }), state.dups[r.id] ? h('span', { class: 'pill warn', text: 'نص مكرر' }) : null),
+        h('td', null, h('b', { text: r.name || '(بدون اسم)' }), h('div', { class: 'small', text: r.country || '' }), state.dups[r.id] ? h('span', { class: 'pill warn', text: 'نص مكرر' }) : null, (function () { var iv = interviewInfo(r.id); return iv && iv.started ? h('span', { class: 'pill ' + (iv.flags ? 'miss' : 'neutral'), text: 'مقابلة ' + iv.score }) : null; })()),
         h('td', null, h('div', { class: 'score ' + e.band.key }, h('b', { text: e.score }), h('div', { class: 'meter' }, h('i', { style: 'width:' + e.score + '%' })))),
         h('td', { text: r.years || '-' }),
         h('td', { class: 'ltr', text: S.parseSpendUSD(r.spend) ? '$' + S.parseSpendUSD(r.spend).toLocaleString('en-US') : '-' }),
@@ -393,6 +394,27 @@
   }
 
   // ---------- drawer ----------
+  // ---------- interview checklist ----------
+  function interviewData(id) { return (state.interviews[id] || {}).data || null; }
+  function interviewInfo(id) { var d = interviewData(id); return d ? window.MagmafyInterview.summary(d) : null; }
+  function saveInterviewDoc(id, doc) {
+    return api('saveInterview', { token: ss.get(), id: id, data: JSON.stringify(doc) }).then(function (j) {
+      if (j && j.ok) state.interviews[id] = Object.assign({}, state.interviews[id], { data: doc, by: state.me, at: new Date().toISOString() });
+      return j;
+    });
+  }
+  function openInterview(id) {
+    var r = state.rows.filter(function (x) { return x.id === id; })[0];
+    if (!r || !window.MagmafyInterview) return;
+    var live = state.source === 'server';
+    window.MagmafyInterview.open({
+      id: id, name: r.name, rate: r.rate, data: interviewData(id), live: live,
+      save: function (doc) { return saveInterviewDoc(id, doc); },
+      onChange: function (doc) { state.interviews[id] = Object.assign({}, state.interviews[id], { data: doc }); },
+      onClose: function () { render(); }
+    });
+  }
+
   function openDrawer(id) { state.selected = id; renderDrawer(id); renderTable(); $('drawer').classList.add('open'); $('scrim').classList.add('open'); $('drawer').setAttribute('aria-hidden', 'false'); }
   function closeDrawer(silent) {
     state.selected = null;
@@ -473,6 +495,19 @@
     note.value = review(id).note || '';
     d.appendChild(h('div', { style: 'margin-top:8px' }, note));
     if (review(id).by) d.appendChild(h('p', { class: 'small', text: 'آخر تعديل: ' + review(id).by }));
+
+    d.appendChild(h('h3', { text: 'المقابلة' }));
+    var iv = interviewInfo(id);
+    var ivBox = h('div', { class: 'iv-sum' });
+    if (iv && iv.started) {
+      ivBox.appendChild(h('b', { class: 'iv-bigsm', text: iv.score + '/100' }));
+      ivBox.appendChild(h('span', { class: 'pill ' + (iv.flags ? 'miss' : iv.rated < 8 ? 'warn' : 'ok'), text: iv.band.t }));
+      ivBox.appendChild(h('span', { class: 'small', text: 'أساسي ' + iv.core + '/' + window.MagmafyInterview.CORE + ' · خطر ' + iv.flags + ' · ' + window.MagmafyInterview.DEC[iv.decision || ''] }));
+    } else ivBox.appendChild(h('span', { class: 'small', text: 'لسه ماتعملتش مقابلة.' }));
+    d.appendChild(ivBox);
+    d.appendChild(h('button', { class: 'btn primary', type: 'button', onclick: function () { openInterview(id); }, text: iv && iv.started ? 'كمّل المقابلة' : 'ابدأ المقابلة' }));
+    if (!live) d.appendChild(h('p', { class: 'small', text: 'في البيانات التجريبية المقابلة مش بتتحفظ.' }));
+    if (state.interviews[id] && state.interviews[id].by) d.appendChild(h('p', { class: 'small', text: 'آخر حفظ للمقابلة: ' + state.interviews[id].by }));
 
     d.appendChild(h('h3', { text: 'إجاباته كاملة' }));
     var qs = [['platforms', 'المنصات اللي أدارها بميزانية حقيقية'], ['spend', 'أعلى ميزانية شهرية أدارها'], ['niche', 'خبرته في الأثاث والديكور والمتاجر'], ['gulf', 'خبرته مع السوق السعودي والخليجي'], ['result', 'أفضل نتيجة حققها لعميل'], ['tracking', 'إزاي بيتأكد إن التتبع سليم'], ['drop', 'أول ٣ حاجات بيفحصها لما الأداء يهبط'], ['more', 'أي شيء تاني حب يقوله']];

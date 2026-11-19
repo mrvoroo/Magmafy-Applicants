@@ -111,7 +111,7 @@ const login = (env, email = A) => { env.post({ action: 'requestCode', email }); 
 // 12. every private action without / with bad token fails
 { const e = makeEnv(A + ',' + B); login(e);
   ['', null, 'abc', 'f'.repeat(96), '0'.repeat(96), 'a'.repeat(300), { x: 1 }, [1]].forEach((t) => {
-    ['getApplicants', 'saveReview', 'setOpen'].forEach((a) => { const r = e.post({ action: a, token: t, id: 'a1', status: 'مقبول', open: false }); ok(!r.ok && r.error === 'auth' && !r.rows, a + ' blocked for token ' + JSON.stringify(t)); }); });
+    ['getApplicants', 'saveReview', 'saveInterview', 'setOpen'].forEach((a) => { const r = e.post({ action: a, token: t, id: 'a1', status: 'مقبول', open: false }); ok(!r.ok && r.error === 'auth' && !r.rows, a + ' blocked for token ' + JSON.stringify(t)); }); });
   ok(e.get({ action: 'status' }).open === true, 'bad calls did not close applications'); }
 
 // 13. old static-token style GET gets nothing
@@ -270,6 +270,31 @@ const login = (env, email = A) => { env.post({ action: 'requestCode', email }); 
   ok(blocked > 0, 'admin hourly send limit enforced');
   const e2 = makeEnv(A + ',' + B); const t2 = login(e2).token; e2.ctx.MailApp.getRemainingDailyQuota = () => 2;
   ok(e2.post({ action: 'sendMail', token: t2, to: 'a@example.com', subject: 's', body: 'b' }).error === 'quota', 'no admin mail when quota nearly gone'); }
+
+// 21. interview checklist: auth, validation, sanitising, round trip
+{ const e = makeEnv(A + ',' + B); const t = login(e).token;
+  const good = { v: 1, fee: '300', cap: '250', checks: { q1: true, q2: false }, flags: { f2: true }, ratings: { exp: 5, niche: 9, gulf: 2.5 }, trial: { t1: 4 }, notes: { q1: '=HYPERLINK("x")' }, decision: 'trial', gen: 'ok', final: 'ok' };
+  ok(e.post({ action: 'saveInterview', token: 'x'.repeat(96), id: 'a1', data: JSON.stringify(good) }).error === 'auth', 'interview needs a session');
+  ok(e.post({ action: 'saveInterview', token: t, id: 'a1', data: JSON.stringify(good) }).ok, 'interview saved');
+  ok(!e.post({ action: 'saveInterview', token: t, id: '../../x', data: JSON.stringify(good) }).ok, 'interview bad id rejected');
+  ok(!e.post({ action: 'saveInterview', token: t, id: 'a1', data: 'not json' }).ok, 'interview bad json rejected');
+  ok(!e.post({ action: 'saveInterview', token: t, id: 'a1', data: '[1,2]' }).ok, 'interview array rejected');
+  ok(!e.post({ action: 'saveInterview', token: t, id: 'a1', data: { a: 1 } }).ok, 'interview non-string data rejected');
+  ok(!e.post({ action: 'saveInterview', token: t, id: 'a1', data: JSON.stringify({ gen: 'x'.repeat(25000) }) }).ok, 'interview oversize rejected');
+  const d = e.post({ action: 'getApplicants', token: t }); const iv = d.interviews.a1.data;
+  ok(iv.fee === '300' && iv.checks.q1 === true && !('q2' in iv.checks), 'interview round trip, false checks dropped');
+  ok(iv.ratings.exp === 5 && !('niche' in iv.ratings) && !('gulf' in iv.ratings), 'ratings clamped to integers 0-5');
+  ok(iv.flags.f2 === true && iv.trial.t1 === 4 && iv.decision === 'trial', 'flags, trial and decision kept');
+  ok(d.interviews.a1.by === A, 'interview records who saved it');
+  // hostile payload: unknown keys, prototype keys, bad decision, bad numbers, too many keys
+  const evil = { fee: '=1+1', cap: '1e9', decision: 'HACK', __proto__: { x: 1 }, checks: { '__proto__': true, 'a b': true, Q1: true }, notes: {}, extra: 'x' };
+  for (let i = 0; i < 100; i++) evil.notes['q' + i] = 'n';
+  ok(e.post({ action: 'saveInterview', token: t, id: 'a1', data: JSON.stringify(evil) }).ok, 'hostile interview accepted but cleaned');
+  const iv2 = e.post({ action: 'getApplicants', token: t }).interviews.a1.data;
+  ok(iv2.fee === '' && iv2.cap === '' && iv2.decision === '', 'bad numbers and decision neutralised');
+  ok(Object.keys(iv2.checks).length === 0 && !('extra' in iv2), 'bad keys and unknown fields dropped');
+  ok(Object.keys(iv2.notes).length <= 40, 'note count capped');
+  ok(e.sheets.Interviews[1][1].startsWith('{'), 'stored cell is JSON, never a formula'); }
 
 console.log(fail === 0 ? `ALL ${pass} CHECKS PASSED` : `${fail} FAILED, ${pass} passed`);
 process.exit(fail ? 1 : 0);

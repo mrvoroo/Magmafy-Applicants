@@ -6,6 +6,7 @@ script, not by this page.**
 
 ## Files
 - `index.html`, `app.js`, `config.js`: the dashboard (login, table, filters, detail drawer, close/open applications)
+- `interview.js`, `interview.css`: the interview checklist (opened from the applicant drawer, button "ابدأ المقابلة"): questions, 0-5 ratings with weights, always-visible red flags, timer, trial task. Saved per applicant in the `Interviews` sheet via the `saveInterview` action.
 - `scoring.js`: scoring rules (pure functions, easy to tune). `demo-data.js`: fake applicants
 - `apps-script/Code.gs`: the backend. `apps-script/test.js` and `e2e.js`: offline security and UI tests
 
@@ -33,6 +34,11 @@ Run the tests: `node apps-script/test.js` (79 checks) and `NODE_PATH=<jsdom> nod
 5. Put the URL in `config.js` (`endpoint`) here, and in `SHEET_ENDPOINT` in the form repo.
 
 Emergency: run `revokeAllSessions` to log everyone out, or `lockdown` to remove `ADMINS` as well.
+
+## Interview checklist
+Needs the updated `Code.gs` (new `Interviews` tab and `saveInterview` action). After pasting it, run `setup` once and deploy a new version.
+Until then the screen still opens but shows that the server needs updating and saves nothing. The server rebuilds every saved document
+field by field (whitelisted keys, numbers 0-5, size limits), so nothing else can be stored through this action.
 
 ## Close applications
 The button "قفل باب التقديم" in the dashboard sets a flag on the server. The form then shows a message that

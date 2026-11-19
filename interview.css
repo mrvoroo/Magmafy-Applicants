@@ -1,0 +1,83 @@
+/* Interview screen. Uses the dashboard variables from index.html. */
+body.iv-open { overflow: hidden; }
+.iv { position: fixed; inset: 0; z-index: 60; background: var(--bg); overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.iv-top { position: sticky; top: 0; z-index: 3; background: rgba(14, 7, 22, 0.96); border-bottom: 1px solid var(--border-strong); padding: 10px 16px; }
+.iv-top-in { max-width: 980px; margin: 0 auto; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.iv-top h2 { font-family: var(--f-display); font-size: 20px; margin: 0; margin-inline-end: auto; }
+.iv-save { font-size: 13px; color: var(--faint); }
+.iv-save.saved { color: var(--good); }
+.iv-save.error, .iv-save.old { color: var(--bad); }
+.iv-save.saving { color: var(--warn); }
+.iv-timer { display: flex; align-items: center; gap: 8px; background: var(--bg-2); border: 1px solid var(--border); border-radius: 14px; padding: 4px 10px; }
+.iv-t { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 18px; direction: ltr; min-width: 3.6em; text-align: center; }
+.iv-seg { font-size: 13px; color: var(--muted); max-width: 210px; }
+.iv-main { max-width: 980px; margin: 0 auto; padding: 14px 16px 170px; }
+.iv-card { background: var(--bg-2); border: 1px solid var(--border); border-radius: 16px; padding: 16px; margin: 14px 0; }
+.iv-card h3 { font-family: var(--f-display); font-size: 18px; margin: 0 0 10px; color: var(--yellow); }
+.iv-card h4 { font-family: var(--f-display); font-size: 16px; margin: 18px 0 4px; color: #ff9ec5; }
+.iv-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+.iv-f { display: block; font-size: 13px; color: var(--muted); }
+.iv-f b { display: block; color: var(--text); font-size: 16px; font-weight: 600; margin-top: 3px; min-height: 36px; }
+.iv-f input, .iv-f select, .iv-f textarea, .iv-q textarea { width: 100%; background: var(--bg); border: 1px solid var(--border-strong); border-radius: 12px; padding: 8px 12px; margin-top: 3px; color: var(--text); font: inherit; }
+.iv textarea { min-height: 72px; resize: vertical; }
+.iv-gap { margin-top: 10px; }
+.iv-chk { display: flex; gap: 10px; align-items: flex-start; padding: 6px 4px; border-radius: 10px; cursor: pointer; }
+.iv-chk:hover { background: var(--bg-3); }
+.iv-chk input { width: 22px; height: 22px; margin-top: 4px; accent-color: var(--yellow); flex: none; }
+.iv-q { border-top: 1px dashed var(--border); padding: 12px 0; }
+.iv-qt { font-weight: 600; }
+.iv-tag { font-size: 12px; border: 1px solid var(--border-strong); border-radius: 99px; padding: 0 8px; color: var(--muted); margin-inline-start: 6px; white-space: nowrap; font-weight: 400; }
+.iv-tag.core { border-color: var(--yellow); color: var(--yellow); }
+.iv-hear { margin: 4px 0 6px; color: var(--muted); font-size: 14px; }
+.iv-hear summary { cursor: pointer; color: #ff9ec5; }
+.iv-rates { display: flex; gap: 6px; flex-wrap: wrap; }
+.iv-rate { width: 44px; height: 44px; border-radius: 12px; border: 1px solid var(--border-strong); background: var(--bg); color: var(--text); cursor: pointer; font-weight: 700; font: inherit; }
+.iv-rate[aria-pressed="true"] { background: var(--grad-btn); border-color: transparent; color: #fff; }
+.iv-crit { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; align-items: center; padding: 10px 0; border-top: 1px dashed var(--border); }
+.iv-cn { font-weight: 600; }
+.iv-w { color: var(--muted); font-size: 13px; }
+.iv-score { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+.iv-big { font-family: var(--f-display); font-size: 44px; font-weight: 700; line-height: 1; color: var(--yellow); font-variant-numeric: tabular-nums; }
+.iv-pill { display: inline-block; border-radius: 99px; padding: 2px 12px; font-weight: 700; font-size: 14px; }
+.iv-pill.ok { background: rgba(76, 217, 160, 0.15); color: var(--good); }
+.iv-pill.mid { background: rgba(254, 218, 117, 0.15); color: var(--warn); }
+.iv-pill.no { background: rgba(255, 122, 156, 0.15); color: var(--bad); }
+.iv-note { font-size: 13px; color: var(--muted); margin: 4px 0; }
+.iv-warn { color: var(--warn); }
+.iv-ok { color: var(--good); }
+.iv-prog { height: 8px; background: var(--bg); border-radius: 99px; overflow: hidden; border: 1px solid var(--border); }
+.iv-prog > i { display: block; height: 100%; background: var(--grad); width: 0; transition: width .25s; }
+.iv-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.iv-sheet { border-color: var(--yellow) !important; min-height: 180px; font-size: 14px; }
+
+/* risk flags: always visible, a dropdown on small screens */
+.iv-risk { position: fixed; inset-inline: 0; bottom: 0; z-index: 4; background: rgba(26, 15, 39, 0.98); border-top: 2px solid var(--border-strong); padding: 8px 16px calc(8px + env(safe-area-inset-bottom)); }
+.iv-risk.on { border-top-color: var(--bad); background: rgba(52, 14, 28, 0.98); }
+.iv-risk-in { max-width: 980px; margin: 0 auto; display: flex; gap: 10px; align-items: center; }
+.iv-risk-h { background: none; border: 0; font: inherit; cursor: default; padding: 0; text-align: start; font-weight: 700; white-space: nowrap; color: var(--bad); display: flex; gap: 6px; align-items: center; }
+.iv-n { background: var(--bad); color: #2a0008; border-radius: 99px; min-width: 26px; text-align: center; padding: 0 8px; font-size: 14px; }
+.iv-n.z { background: var(--border-strong); color: var(--muted); }
+.iv-car { display: none; transition: transform .2s; }
+.iv-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.iv-chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border-strong); background: var(--bg); border-radius: 99px; padding: 4px 12px 4px 10px; cursor: pointer; min-height: 40px; font-size: 14px; white-space: nowrap; user-select: none; }
+.iv-chip input { width: 18px; height: 18px; accent-color: var(--bad); margin: 0; }
+.iv-chip:has(input:checked) { background: rgba(255, 122, 156, 0.2); border-color: var(--bad); color: #ffd3da; font-weight: 600; }
+.iv-risk-msg { font-size: 13px; color: #ffd3da; }
+.iv-risk-msg:empty { display: none; }
+.iv-risk-in { flex-wrap: wrap; }
+@media (max-width: 760px) {
+  .iv-risk-in { flex-direction: column; align-items: stretch; gap: 4px; flex-wrap: nowrap; }
+  .iv-risk-h { cursor: pointer; width: 100%; justify-content: space-between; min-height: 44px; }
+  .iv-car { display: inline-block; margin-inline-start: auto; }
+  .iv-risk.open .iv-car { transform: rotate(180deg); }
+  .iv-chips { display: none; }
+  .iv-risk.open .iv-chips { display: flex; flex-direction: column; flex-wrap: nowrap; gap: 6px; max-height: 55vh; overflow-y: auto; padding-bottom: 6px; }
+  .iv-risk.open .iv-chip { white-space: normal; width: 100%; }
+  .iv-main { padding-bottom: 120px; }
+  .iv-seg { max-width: 120px; }
+}
+@media (prefers-reduced-motion: reduce) { .iv-prog > i, .iv-car { transition: none; } }
+
+/* small pieces inside the dashboard */
+.iv-sum { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 6px 0 10px; }
+.iv-bigsm { font-family: var(--f-display); font-size: 26px; color: var(--yellow); font-variant-numeric: tabular-nums; }

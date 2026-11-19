@@ -18,7 +18,7 @@
   var state = {
     rows: [], evals: {}, dups: {}, reviews: {}, source: 'none', // 'server' | 'demo' | 'file' | 'none'
     sortKey: 'score', sortDir: -1, band: '', selected: null,
-    open: null, me: '', used: null, cap: null
+    open: null, me: '', used: null, cap: null, msgs: {}, sender: ''
   };
 
   // ---------- helpers ----------
@@ -105,7 +105,8 @@
 
   function clearData() {
     state.rows = []; state.evals = {}; state.dups = {}; state.reviews = {}; state.source = 'none';
-    state.selected = null; state.me = ''; state.open = null; state.used = null; state.cap = null;
+    state.selected = null; state.me = ''; state.open = null; state.used = null; state.cap = null; state.msgs = {}; state.sender = '';
+    if (window.MagmafyComms) window.MagmafyComms.reset();
     closeDrawer(true);
     $('drawer').textContent = '';
     $('tbody').textContent = '';
@@ -163,14 +164,15 @@
   function loadData() {
     var t = ss.get();
     if (!t) return Promise.resolve(false);
-    banner('', 'جارٍ تحميل المتقدمين...');
+    var keep = $('banner').firstChild && $('banner').firstChild.className.indexOf('ok') !== -1 ? $('banner').firstChild.textContent : '';
+    if (!keep) banner('', 'جارٍ تحميل المتقدمين...');
     return api('getApplicants', { token: t }).then(function (j) {
       if (!j || !j.ok) { banner('error', 'تعذّر تحميل البيانات. حاول التحديث.'); return false; }
       state.me = j.me || '';
       state.reviews = j.reviews || {};
-      state.open = j.open; state.used = j.used; state.cap = j.cap;
+      state.open = j.open; state.used = j.used; state.cap = j.cap; state.msgs = j.msgs || {}; state.sender = j.sender || '';
       setMe(state.me);
-      banner('', '');
+      banner(keep ? 'ok' : '', keep);
       setRows(j.rows || [], 'server');
       renderGate();
       return true;
@@ -302,6 +304,7 @@
     var b = $('demoBtn'), away = state.source === 'demo' || state.source === 'file';
     b.textContent = away ? 'الرجوع للبيانات الحقيقية' : 'بيانات تجريبية';
     b.className = 'btn' + (away ? ' primary' : '');
+    $('newMailBtn').disabled = $('tplBtn').disabled = state.source !== 'server';
   }
 
   function render() {
@@ -373,9 +376,20 @@
         h('td', { class: 'rate' + (r.rate ? '' : ' none'), text: r.rate || 'لم يذكر' }),
         h('td', null, docsPill(e)),
         h('td', { text: fmtDate(r.submittedAt) }),
-        h('td', null, h('span', { class: 'pill neutral', text: statusOf(r.id) })));
+        h('td', null, h('span', { class: 'pill neutral', text: statusOf(r.id) }), contactsLine(r.id)));
       tb.appendChild(tr);
     });
+  }
+
+  function contactsLine(id) {
+    var m = state.msgs[id] || [];
+    if (!m.length) return null;
+    var e = m.filter(function (x) { return x.ch === 'email'; }).length, w = m.length - e;
+    return h('span', { class: 'contacts', text: (e ? 'إيميل ×' + e : '') + (e && w ? ' · ' : '') + (w ? 'واتساب ×' + w : '') });
+  }
+  function fmtWhen(iso) {
+    var d = new Date(iso);
+    return isNaN(d) ? '' : d.toLocaleString('ar-EG', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
   }
 
   // ---------- drawer ----------
@@ -415,9 +429,21 @@
       h('div', { class: 'big band-' + e.band.key, text: e.score }),
       h('div', null, h('b', { class: 'band-' + e.band.key, text: e.band.label }), h('div', { class: 'small', text: 'من ١٠٠' }))));
 
-    var actions = h('div', { class: 'row-actions' });
-    if (phone.length >= 8) actions.appendChild(h('a', { class: 'btn primary', href: 'https://wa.me/' + phone, target: '_blank', rel: 'noopener noreferrer', text: 'واتساب' }));
-    d.appendChild(actions);
+    d.appendChild(h('h3', { text: 'تواصل' }));
+    var live = state.source === 'server', C = window.MagmafyComms;
+    var contact = h('div', { class: 'contact-row' },
+      h('button', { class: 'btn primary', type: 'button', disabled: !live || !/@/.test(String(r.email || '')), title: /@/.test(String(r.email || '')) ? '' : 'مفيش إيميل للمتقدم ده', onclick: function () { C.openMail(id); }, text: 'إرسال إيميل' }),
+      h('button', { class: 'btn primary', type: 'button', disabled: !live || phone.length < 8, onclick: function () { C.openWa(id); }, text: 'رسالة واتساب' }));
+    d.appendChild(contact);
+    if (!live) d.appendChild(h('p', { class: 'small', text: 'الإرسال متاح من البيانات الحقيقية فقط.' }));
+    var hist = state.msgs[id] || [];
+    if (hist.length) {
+      var ul = h('ul', { class: 'history' });
+      hist.slice().reverse().forEach(function (m) {
+        ul.appendChild(h('li', null, h('span', { class: 'pill neutral', text: m.ch === 'email' ? 'إيميل' : 'واتساب' }), h('span', { text: (C.labels[m.tpl] || 'رسالة') + ' · ' + fmtWhen(m.at) + (m.by ? ' · ' + m.by : '') })));
+      });
+      d.appendChild(ul);
+    }
 
     d.appendChild(h('h3', { text: 'المستندات' }));
     d.appendChild(h('ul', { class: 'checklist' }, linkRow('الـ CV', e.docs.cv), linkRow('النتائج السابقة', e.docs.work)));
@@ -554,6 +580,8 @@
       setRows(JSON.parse(JSON.stringify(window.MAGMAFY_DEMO_ROWS)), 'demo');
     });
     $('refreshBtn').addEventListener('click', function () { loadData(); });
+    $('newMailBtn').addEventListener('click', function () { window.MagmafyComms.openMail('', 'custom'); });
+    $('tplBtn').addEventListener('click', function () { window.MagmafyComms.openTemplates(); });
     $('logoutBtn').addEventListener('click', logout);
     $('gateBtn').addEventListener('click', toggleGate);
     $('importBtn').addEventListener('click', function () { $('fileInput').click(); });
@@ -577,6 +605,7 @@
   }
 
   function boot() {
+    window.MagmafyComms.init({ h: h, $: $, api: api, state: state, banner: banner, confirm: confirmDialog, token: function () { return ss.get(); }, reload: function () { return loadData(); } });
     bind();
     bindLogin();
     if (ss.get()) {

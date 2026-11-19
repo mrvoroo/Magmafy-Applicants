@@ -1,0 +1,22 @@
+// Unit tests for the pure helpers in comms.js (phone normalisation, time zones, placeholders). Run: node apps-script/comms-test.js
+const u = require('../comms.js');
+let pass = 0, fail = 0; const ok = (c, n) => { if (c) pass++; else { fail++; console.log('FAIL:', n); } };
+const p = u.normalizePhone;
+ok(p('+20 100 123 4567', 'مصر').digits === '201001234567' && !p('+20 100 123 4567', 'مصر').warn, 'international with plus');
+ok(p('0096650123456', '').digits === '96650123456', '00 prefix removed');
+ok(p('01001234567', 'مصر').digits === '201001234567' && p('01001234567', 'مصر').warn, 'local Egyptian number guessed with a warning');
+ok(p('0501234567', 'Saudi Arabia').digits === '966501234567', 'local Saudi number guessed');
+ok(!p('0501234567', '').ok, 'local number with unknown country refused');
+ok(!p('123', 'مصر').ok && !p('', '').ok && !p(null, '').ok, 'too short / empty refused');
+ok(p('٠١٠٠١٢٣٤٥٦٧', 'مصر').digits === '201001234567', 'Arabic-Indic digits understood');
+const w = u.interviewWhen('2026-11-26', '16:00', 'Asia/Riyadh', 'en', 'Africa/Cairo');
+ok(w.time.includes('4:00 PM') && w.time.includes('GMT+3') && w.time.includes('3:00 PM') && w.time.includes('GMT+2'), 'Riyadh 16:00 = Cairo 15:00 in November: ' + w.time);
+ok(u.interviewWhen('2026-07-20', '16:00', 'Asia/Riyadh', 'en', 'Africa/Cairo').time.includes('4:00 PM Egypt time (GMT+3)'), 'Egypt daylight saving handled in July');
+ok(u.interviewWhen('2026-11-26', '23:30', 'Asia/Riyadh', 'en', 'Asia/Dubai').time.includes('November 27'), 'next-day equivalent is spelled out');
+ok(!u.interviewWhen('x', '16:00', 'Asia/Riyadh', 'ar', ''), 'invalid date -> null');
+ok(u.interviewWhen('2026-11-26', '16:00', 'Asia/Riyadh', 'ar', 'Asia/Riyadh').time.indexOf('=') === -1, 'no duplicate zone when applicant is in the same zone');
+ok(u.zoneForCountry('مصر') === 'Africa/Cairo' && u.zoneForCountry('Kuwait') === 'Asia/Kuwait' && u.zoneForCountry('Mars') === '', 'country -> zone');
+ok(u.fillText('أهلًا {name} ، تمام {date}', { name: '', date: 'x' }) === 'أهلًا، تمام x', 'empty name leaves clean text');
+ok(u.hasPlaceholders('a {time}') && !u.hasPlaceholders('a'), 'placeholder detection');
+ok(u.waLink('201', 'مرحبا بك&x=1') === 'https://wa.me/201?text=' + encodeURIComponent('مرحبا بك&x=1'), 'wa.me text is URL-encoded');
+console.log(fail ? fail + ' FAILED' : 'COMMS: ALL ' + pass + ' CHECKS PASSED'); process.exit(fail ? 1 : 0);

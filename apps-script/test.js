@@ -12,7 +12,7 @@ function makeEnv(adminsProp) {
     const data = sheets[name];
     return {
       getLastRow: () => data.length, appendRow: (r) => { data.push(r.slice()); },
-      setFrozenRows() {},
+      setFrozenRows() {}, deleteRow: (r) => { data.splice(r - 1, 1); },
       getRange(r, c, nr = 1, nc = 1) {
         return {
           getValues: () => { const o = []; for (let i = 0; i < nr; i++) { const row = []; for (let j = 0; j < nc; j++) row.push((data[r - 1 + i] || [])[c - 1 + j] ?? ''); o.push(row); } return o; },
@@ -40,6 +40,7 @@ function makeEnv(adminsProp) {
     MailApp: { sendEmail: (m) => mails.push(m), getRemainingDailyQuota: () => 100 },
     ContentService: { MimeType: { JSON: 'json' }, createTextOutput: (s) => ({ s, setMimeType() { return this; }, getContent() { return s; } }) },
     SpreadsheetApp: { create: () => { mkSheet('Applicants'); return ssObj; }, openById: () => ssObj },
+    Session: { getEffectiveUser: () => ({ getEmail: () => 'magmafyogp@gmail.com' }) },
     Logger: { log() {} }
   };
   vm.createContext(ctx); vm.runInContext(src, ctx);
@@ -228,6 +229,47 @@ const login = (env, email = A) => { env.post({ action: 'requestCode', email }); 
   e.post({ action: 'submit', name: 'one', phone: '+20100' }); e.post({ action: 'submit', name: 'two', phone: '+20100' });
   const last = e.mails[e.mails.length - 1]; ok(e.mails.length === 2 && last.subject.startsWith('اكتمل العدد') && last.body.includes('قفل باب التقديم تلقائيًا'), 'completion notice sent right away: ' + last.subject);
   ok(e.mails.every((m) => m.to === OWN), 'notices only go to NOTIFY_EMAIL'); }
+
+
+// 30. communication center: templates, sending, log, status
+{ const e = makeEnv(A + ',' + B); const t = login(e).token;
+  const gt = e.post({ action: 'getTemplates', token: t });
+  ok(gt.ok && gt.templates.length === 10 && gt.sender === 'magmafyogp@gmail.com', 'ten default templates (5 x ar/en) and sender address');
+  ok(e.post({ action: 'getTemplates' }).ok === false, 'templates need a session');
+  const sv = e.post({ action: 'saveTemplate', token: t, key: 'accepted', lang: 'ar', subject: '=HYPERLINK("x")', headline: 'H', body: 'مرحبا {name}', wa: 'w' });
+  ok(sv.ok, 'template saved');
+  const g2 = e.post({ action: 'getTemplates', token: t }).templates.find((x) => x.key === 'accepted' && x.lang === 'ar');
+  ok(g2.custom && g2.subject.startsWith(' =') && g2.body === 'مرحبا {name}', 'saved template returned, formula injection neutralised');
+  ok(!e.post({ action: 'saveTemplate', token: t, key: 'evil', lang: 'ar', subject: 's', body: 'b' }).ok, 'unknown template key rejected');
+  ok(e.post({ action: 'resetTemplate', token: t, key: 'accepted', lang: 'ar' }).ok && !e.post({ action: 'getTemplates', token: t }).templates.find((x) => x.key === 'accepted' && x.lang === 'ar').custom, 'reset returns to default');
+
+  const pv = e.post({ action: 'previewMail', token: t, lang: 'ar', subject: 's', headline: '<script>x</script>', body: 'أهلًا <img src=x onerror=1>', forApplicant: true });
+  ok(pv.ok && !pv.html.includes('<script>') && !pv.html.includes('<img src=x') && pv.html.includes('dir="rtl"') && pv.html.includes('logo'), 'preview is branded and escaped');
+
+  e.post({ action: 'submit', name: 'Sara', phone: '+20123456789', email: 'sara@example.com', lang: 'en' });
+  const sara = e.sheets.Applicants[e.sheets.Applicants.length - 1];
+  const idx = e.sheets.Applicants[0].indexOf('lang');
+  ok(idx > 0 && sara[idx] === 'en', 'applicant language stored');
+  ok(e.mails[e.mails.length - 1].htmlBody.includes('dir="ltr"') && e.mails[e.mails.length - 1].subject.startsWith('We received'), 'English applicant gets the English confirmation');
+  const sid = sara[0], n0 = e.mails.length;
+  const r = e.post({ action: 'sendMail', token: t, applicantId: sid, template: 'accepted', lang: 'en', subject: 'Accepted', headline: 'Hi', body: 'Hello **Sara**', setStatus: true });
+  const sent = e.mails[e.mails.length - 1];
+  ok(r.ok && e.mails.length === n0 + 1 && sent.to === 'sara@example.com' && sent.replyTo === 'magmafyogp@gmail.com' && sent.name === 'Magmafy', 'sent to the applicant address from sheet, replyTo = company inbox');
+  ok(r.status === 'مقبول' && JSON.stringify(e.post({ action: 'getApplicants', token: t }).reviews).includes('مقبول'), 'status updated to accepted');
+  const ga = e.post({ action: 'getApplicants', token: t });
+  ok(ga.sender === 'magmafyogp@gmail.com' && ga.msgs[sid] && ga.msgs[sid][0].ch === 'email', 'message history returned with applicants');
+  ok(e.post({ action: 'sendMail', token: t, to: 'x@example.com', subject: 's', body: 'b {name}' }).error === 'placeholder', 'unfilled placeholder blocked');
+  ok(e.post({ action: 'sendMail', token: t, to: 'x@y.com\nBcc: z@z.com', subject: 's', body: 'b' }).error === 'to', 'header injection in custom address rejected');
+  ok(e.post({ action: 'sendMail', token: t, applicantId: 'nope', subject: 's', body: 'b' }).error === 'notfound', 'unknown applicant rejected');
+  const c = e.post({ action: 'sendMail', token: t, to: 'friend@example.com', subject: 'Hi\nBcc: a@b.com', body: 'blank mail', lang: 'ar' });
+  ok(c.ok && !/\n/.test(e.mails[e.mails.length - 1].subject), 'custom/blank mail sent, newline stripped from subject');
+  const lg = e.post({ action: 'logMessage', token: t, applicantId: sid, template: 'interview', setStatus: true });
+  ok(lg.ok && lg.status === 'مقابلة', 'WhatsApp log moves the status to interview');
+  ok(!e.post({ action: 'logMessage', token: t, applicantId: '../x' }).ok, 'bad id rejected in log');
+  let blocked = 0; for (let i = 0; i < 40; i++) if (e.post({ action: 'sendMail', token: t, to: 'u' + i + '@example.com', subject: 's', body: 'b' }).error === 'rate') blocked++;
+  ok(blocked > 0, 'admin hourly send limit enforced');
+  const e2 = makeEnv(A + ',' + B); const t2 = login(e2).token; e2.ctx.MailApp.getRemainingDailyQuota = () => 2;
+  ok(e2.post({ action: 'sendMail', token: t2, to: 'a@example.com', subject: 's', body: 'b' }).error === 'quota', 'no admin mail when quota nearly gone'); }
 
 console.log(fail === 0 ? `ALL ${pass} CHECKS PASSED` : `${fail} FAILED, ${pass} passed`);
 process.exit(fail ? 1 : 0);

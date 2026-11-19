@@ -111,7 +111,7 @@ const login = (env, email = A) => { env.post({ action: 'requestCode', email }); 
 // 12. every private action without / with bad token fails
 { const e = makeEnv(A + ',' + B); login(e);
   ['', null, 'abc', 'f'.repeat(96), '0'.repeat(96), 'a'.repeat(300), { x: 1 }, [1]].forEach((t) => {
-    ['getApplicants', 'saveReview', 'saveInterview', 'setOpen'].forEach((a) => { const r = e.post({ action: a, token: t, id: 'a1', status: 'مقبول', open: false }); ok(!r.ok && r.error === 'auth' && !r.rows, a + ' blocked for token ' + JSON.stringify(t)); }); });
+    ['getApplicants', 'saveReview', 'saveInterview', 'saveContract', 'getContract', 'setOpen'].forEach((a) => { const r = e.post({ action: a, token: t, id: 'a1', status: 'مقبول', open: false }); ok(!r.ok && r.error === 'auth' && !r.rows, a + ' blocked for token ' + JSON.stringify(t)); }); });
   ok(e.get({ action: 'status' }).open === true, 'bad calls did not close applications'); }
 
 // 13. old static-token style GET gets nothing
@@ -295,6 +295,47 @@ const login = (env, email = A) => { env.post({ action: 'requestCode', email }); 
   ok(Object.keys(iv2.checks).length === 0 && !('extra' in iv2), 'bad keys and unknown fields dropped');
   ok(Object.keys(iv2.notes).length <= 40, 'note count capped');
   ok(e.sheets.Interviews[1][1].startsWith('{'), 'stored cell is JSON, never a formula'); }
+
+// 22b. contracts: validation, signing, freezing, ending
+{ const e = makeEnv(A + ',' + B); const t = login(e).token;
+  const stroke = []; for (let i = 0; i < 30; i++) stroke.push(10 + i * 5, 20 + (i % 7) * 8);
+  const base = { no: 'MGF-20261119-A1', fee: '150', cur: 'USD', payDays: 7, noticeDays: 14, replyHours: 24, nonSol: 12, start: '2026-12-01', platforms: 'ميتا، جوجل', law: 'x',
+    p1: { entity: 'ماجمافاي', rep: 'أشرف', title: 'شريك مؤسس' }, p2: { name: 'سارة علي', phone: '+20100', email: 's@x.com', country: 'مصر' },
+    terms: [{ h: '1. البند', p: ['نص البند الأول'] }, { h: '2. البند', p: ['نص', 'نص ٢'] }] };
+  const post = (op, doc, id = 'a1') => e.post({ action: 'saveContract', token: t, id, op, data: JSON.stringify(doc) });
+  ok(e.post({ action: 'saveContract', token: 'x'.repeat(96), id: 'a1', op: 'draft', data: '{}' }).error === 'auth', 'contract needs a session');
+  ok(!post('draft', base, '../x').ok && !e.post({ action: 'saveContract', token: t, id: 'a1', op: 'nope', data: '{}' }).ok && !e.post({ action: 'saveContract', token: t, id: 'a1', op: 'draft', data: 'bad' }).ok, 'bad id, op or json rejected');
+  ok(!e.post({ action: 'saveContract', token: t, id: 'a1', op: 'draft', data: '[1]' }).ok && !e.post({ action: 'saveContract', token: t, id: 'a1', op: 'draft', data: 'x'.repeat(41000) }).ok, 'array and oversize rejected');
+  ok(post('draft', base).ok, 'draft saved');
+  let l = e.post({ action: 'getApplicants', token: t }).contracts.a1; ok(l.status === 'draft' && l.fee === '150' && l.name === 'سارة علي' && !('terms' in l) && !('sig' in l), 'list carries a light summary only');
+  ok(post('draft', Object.assign({}, base, { fee: '175', cur: 'EVIL', payDays: 999, start: 'tomorrow' })).ok, 'draft can be overwritten');
+  let c = e.post({ action: 'getContract', token: t, id: 'a1' }).contract; ok(c.fee === '175' && c.cur === 'USD' && c.payDays === 7 && c.start === '', 'bad currency, number and date neutralised');
+  ok(e.post({ action: 'getContract', token: t, id: 'zz' }).contract === null, 'missing contract is null');
+  // signing needs everything
+  ok(post('sign', base).error === 'incomplete', 'cannot sign without a signature');
+  ok(post('sign', Object.assign({}, base, { sig: { name: 'ab', strokes: [stroke] } })).error === 'incomplete', 'cannot sign with a short typed name');
+  ok(post('sign', Object.assign({}, base, { fee: '', sig: { name: 'سارة علي', strokes: [stroke] } })).error === 'incomplete', 'cannot sign without a fee');
+  ok(post('sign', Object.assign({}, base, { sig: { name: 'سارة علي', strokes: [[1, 2]] } })).error === 'incomplete', 'a dot is not a signature');
+  ok(post('sign', Object.assign({}, base, { sig: { name: 'سارة علي', strokes: [[9999, 5, 4, 4].concat(stroke)] } })).error === 'incomplete', 'out-of-range stroke dropped');
+  const r = post('sign', Object.assign({}, base, { fee: '150', status: 'ended', signedAt: '2000-01-01', hash: 'fake', sig: { name: 'سارة علي', strokes: [stroke] } }));
+  ok(r.ok && r.contract.status === 'signed' && /^[0-9a-f]{64}$/.test(r.contract.hash), 'signed with a server hash');
+  c = e.post({ action: 'getContract', token: t, id: 'a1' }).contract;
+  ok(c.status === 'signed' && c.signedBy === A && c.signedAt.startsWith('20') && c.signedAt !== '2000-01-01' && c.hash !== 'fake', 'status, time, signer and hash come from the server, not the client');
+  ok(c.sig.pts === 30 && c.sig.name === 'سارة علي' && c.terms.length === 2, 'signature and terms stored');
+  // frozen
+  ok(post('draft', Object.assign({}, base, { fee: '1' })).error === 'locked' && post('sign', Object.assign({}, base, { sig: { name: 'سارة علي', strokes: [stroke] } })).error === 'locked', 'a signed contract cannot be rewritten or re-signed');
+  ok(e.post({ action: 'getContract', token: t, id: 'a1' }).contract.fee === '150', 'fee unchanged after rejected edits');
+  // end
+  ok(e.post({ action: 'saveContract', token: t, id: 'zz', op: 'end', data: '{}' }).error === 'invalid', 'cannot end a contract that is not signed');
+  const en = e.post({ action: 'saveContract', token: t, id: 'a1', op: 'end', data: JSON.stringify({ reason: 'انتهى التعاون', fee: '9', terms: [] }) });
+  c = e.post({ action: 'getContract', token: t, id: 'a1' }).contract;
+  ok(en.ok && c.status === 'ended' && c.endReason === 'انتهى التعاون' && c.endedBy === A && c.fee === '150' && c.terms.length === 2 && c.hash === r.contract.hash, 'ending changes only the end fields');
+  ok(post('draft', base).error === 'locked', 'an ended contract stays locked');
+  // hostile
+  const ev = { fee: '=1+1', p2: { name: '=HYPERLINK("x")' }, terms: [{ h: 'x'.repeat(500), p: new Array(20).fill('y'.repeat(1500)) }], __proto__: { a: 1 } }; for (let i = 0; i < 80; i++) ev.terms.push({ h: 'h' + i, p: ['p'] });
+  ok(post('draft', ev, 'a2').ok, 'hostile draft accepted but cleaned');
+  c = e.post({ action: 'getContract', token: t, id: 'a2' }).contract; ok(c.fee === '' && c.terms.length <= 30 && c.terms[0].h.length <= 120 && c.terms[0].p.length <= 12 && JSON.stringify(c.terms).length < 20000, 'terms capped');
+  ok(e.sheets.Contracts[1][1].startsWith('{') && e.sheets.Contracts.every((row) => !/^[=+\-@]/.test(String(row[1]))), 'stored cell is JSON, never a formula'); }
 
 console.log(fail === 0 ? `ALL ${pass} CHECKS PASSED` : `${fail} FAILED, ${pass} passed`);
 process.exit(fail ? 1 : 0);

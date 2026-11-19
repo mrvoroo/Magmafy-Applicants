@@ -44,6 +44,10 @@ var INTERVIEW_SHEET = 'Interviews';
 var INTERVIEW_COLUMNS = ['id', 'data', 'updatedBy', 'updatedAt'];
 var MAX_INTERVIEW_JSON = 20000;
 var INTERVIEW_DECISIONS = ['', 'trial', 'main', 'backup', 'reject'];
+var CONTRACT_SHEET = 'Contracts';
+var CONTRACT_COLUMNS = ['id', 'data', 'updatedBy', 'updatedAt'];
+var MAX_CONTRACT_JSON = 40000;
+var CONTRACT_CURRENCIES = ['USD', 'SAR', 'EGP', 'AED'];
 var STATUSES = ['جديد', 'تم التواصل', 'مقابلة', 'مقبول', 'مرفوض'];
 var TEMPLATE_SHEET = 'Templates';
 var TEMPLATE_COLUMNS = ['key', 'lang', 'subject', 'headline', 'body', 'wa', 'updatedBy', 'updatedAt'];
@@ -90,6 +94,8 @@ function doPost(e) {
       case 'getApplicants': return json_(authed_(data, getApplicants_));
       case 'saveReview': return json_(authed_(data, saveReview_));
       case 'saveInterview': return json_(authed_(data, saveInterview_));
+      case 'getContract': return json_(authed_(data, getContract_));
+      case 'saveContract': return json_(authed_(data, saveContract_));
       case 'getTemplates': return json_(authed_(data, getTemplates_));
       case 'saveTemplate': return json_(authed_(data, saveTemplate_));
       case 'resetTemplate': return json_(authed_(data, resetTemplate_));
@@ -139,6 +145,7 @@ function setup() {
   templatesSheet_();
   messagesSheet_();
   interviewsSheet_();
+  contractsSheet_();
   props.deleteProperty('TOKEN'); // the old static token no longer exists anywhere
   Logger.log('Sheet: ' + ss.getUrl());
   Logger.log('Owner notifications: ' + (normEmail_(props_().getProperty('NOTIFY_EMAIL')) ? 'on' : 'OFF (add the NOTIFY_EMAIL property)'));
@@ -837,7 +844,7 @@ function getApplicants_(data, email) {
   rv.forEach(function (r) {
     reviews[String(r[0])] = { status: r[1], note: r[2], by: r[3], at: r[4] instanceof Date ? r[4].toISOString() : r[4] };
   });
-  return { ok: true, rows: rows, reviews: reviews, interviews: interviews_(), msgs: messagesByApplicant_(), sender: senderEmail_(), open: !isClosed_(), me: email, used: usedCount_(sheet_()), cap: maxApps_() };
+  return { ok: true, rows: rows, reviews: reviews, interviews: interviews_(), contracts: contracts_(), msgs: messagesByApplicant_(), sender: senderEmail_(), open: !isClosed_(), me: email, used: usedCount_(sheet_()), cap: maxApps_() };
 }
 
 function saveReview_(data, email) {
@@ -912,6 +919,136 @@ function interviews_() {
     var d = null;
     try { d = JSON.parse(String(r[1])); } catch (e) { d = null; }
     if (d && typeof d === 'object') out[String(r[0])] = { data: d, by: r[2], at: r[3] instanceof Date ? r[3].toISOString() : r[3] };
+  });
+  return out;
+}
+
+// ---- contracts: one per applicant. A signed contract is frozen on the server; it can only be ended.
+function contractsSheet_() { return sheetWithHeader_(CONTRACT_SHEET, CONTRACT_COLUMNS); }
+
+function intIn_(v, lo, hi, dflt) { v = Number(v); return (isFinite(v) && v === Math.floor(v) && v >= lo && v <= hi) ? v : dflt; }
+function str_(v, max) { return typeof v === 'string' ? v.replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, max) : ''; }
+
+function sanitizeSig_(s) {
+  if (!s || typeof s !== 'object') return null;
+  var W = 300, H = 120, MAX_PTS = 1500, strokes = [], pts = 0;
+  (Array.isArray(s.strokes) ? s.strokes : []).slice(0, 40).forEach(function (st) {
+    if (!Array.isArray(st)) return;
+    var out = [], ok = true;
+    for (var i = 0; i + 1 < st.length && ok; i += 2) {
+      var x = intIn_(st[i], 0, W, -1), y = intIn_(st[i + 1], 0, H, -1);
+      if (x < 0 || y < 0) ok = false; else out.push(x, y);
+    }
+    if (ok && out.length >= 2 && pts + out.length / 2 <= MAX_PTS) { strokes.push(out); pts += out.length / 2; }
+  });
+  return pts ? { w: W, h: H, strokes: strokes, name: str_(s.name, 80), pts: pts } : null;
+}
+
+function sanitizeTerms_(t) {
+  var out = [], total = 0;
+  (Array.isArray(t) ? t : []).slice(0, 30).forEach(function (c) {
+    if (!c || typeof c !== 'object') return;
+    var h = str_(c.h, 120), ps = [];
+    (Array.isArray(c.p) ? c.p : []).slice(0, 12).forEach(function (p) {
+      p = str_(p, 1500);
+      if (p && total + p.length <= 16000) { ps.push(p); total += p.length; }
+    });
+    if (h || ps.length) out.push({ h: h, p: ps });
+  });
+  return out;
+}
+
+function sanitizeContract_(o) {
+  var p1 = o.p1 && typeof o.p1 === 'object' ? o.p1 : {}, p2 = o.p2 && typeof o.p2 === 'object' ? o.p2 : {};
+  return {
+    v: 1,
+    no: /^[A-Z0-9-]{4,24}$/.test(String(o.no)) ? String(o.no) : '',
+    fee: numStr_(o.fee),
+    cur: CONTRACT_CURRENCIES.indexOf(o.cur) !== -1 ? o.cur : 'USD',
+    payDays: intIn_(o.payDays, 1, 30, 7),
+    noticeDays: intIn_(o.noticeDays, 1, 60, 14),
+    replyHours: intIn_(o.replyHours, 1, 72, 24),
+    nonSol: intIn_(o.nonSol, 0, 36, 12),
+    start: /^\d{4}-\d{2}-\d{2}$/.test(String(o.start)) ? String(o.start) : '',
+    platforms: str_(o.platforms, 200),
+    law: str_(o.law, 200),
+    p1: { entity: str_(p1.entity, 100), rep: str_(p1.rep, 60), title: str_(p1.title, 60) },
+    p2: { name: str_(p2.name, 80), phone: str_(p2.phone, 30), email: str_(p2.email, 100), country: str_(p2.country, 60) },
+    terms: sanitizeTerms_(o.terms)
+  };
+}
+
+function contractSummary_(d) {
+  return {
+    status: d.status || 'draft', no: d.no || '', fee: d.fee || '', cur: d.cur || 'USD', start: d.start || '',
+    name: d.p2 && d.p2.name ? d.p2.name : '', signedAt: d.signedAt || '', endedAt: d.endedAt || ''
+  };
+}
+
+function readContractRow_(id) {
+  var rows = contractsSheet_().getDataRange().getValues();
+  for (var i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]) !== id) continue;
+    var d = null;
+    try { d = JSON.parse(String(rows[i][1])); } catch (e) { d = null; }
+    return d && typeof d === 'object' ? { doc: d, by: rows[i][2], at: rows[i][3] instanceof Date ? rows[i][3].toISOString() : rows[i][3] } : null;
+  }
+  return null;
+}
+
+function getContract_(data, email) {
+  var id = String(data.id == null ? '' : data.id);
+  if (!/^[\w-]{1,40}$/.test(id)) return { ok: false, error: 'invalid' };
+  var r = readContractRow_(id);
+  return { ok: true, contract: r ? r.doc : null, by: r ? r.by : '', at: r ? r.at : '' };
+}
+
+function saveContract_(data, email) {
+  var id = String(data.id == null ? '' : data.id);
+  if (!/^[\w-]{1,40}$/.test(id)) return { ok: false, error: 'invalid' };
+  var op = data.op === 'draft' || data.op === 'sign' || data.op === 'end' ? data.op : '';
+  var raw = typeof data.data === 'string' ? data.data : '';
+  if (!op || !raw || raw.length > MAX_CONTRACT_JSON) return { ok: false, error: 'invalid' };
+  var obj;
+  try { obj = JSON.parse(raw); } catch (e) { return { ok: false, error: 'invalid' }; }
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return { ok: false, error: 'invalid' };
+  var failure = '', summary = null;
+  withLock_(function () {
+    var sh = contractsSheet_(), ids = sh.getRange(1, 1, Math.max(sh.getLastRow(), 1), 1).getValues(), row = -1, cur = null;
+    for (var i = 1; i < ids.length; i++) if (String(ids[i][0]) === id) { row = i + 1; break; }
+    if (row !== -1) { try { cur = JSON.parse(String(sh.getRange(row, 2, 1, 1).getValues()[0][0])); } catch (e) { cur = null; } }
+    var st = cur && cur.status ? cur.status : 'none', doc;
+    if (op === 'draft' || op === 'sign') {
+      if (st === 'signed' || st === 'ended') { failure = 'locked'; return; } // a signed contract can never be rewritten
+      doc = sanitizeContract_(obj);
+      doc.status = 'draft';
+      if (op === 'sign') {
+        var sig = sanitizeSig_(obj.sig);
+        if (!sig || sig.pts < 15 || sig.name.length < 3 || !doc.fee || !doc.p2.name || !doc.p1.rep || !doc.start || !doc.no || !doc.terms.length) { failure = 'incomplete'; return; }
+        doc.status = 'signed'; doc.sig = sig; doc.signedAt = new Date().toISOString(); doc.signedBy = email;
+        doc.hash = sha_(JSON.stringify({ no: doc.no, terms: doc.terms, fee: doc.fee, cur: doc.cur, start: doc.start, p1: doc.p1, p2: doc.p2, sig: sig, at: doc.signedAt }));
+      }
+    } else { // end: only a signed contract, and nothing but the end fields changes
+      if (st !== 'signed') { failure = 'invalid'; return; }
+      doc = cur; doc.status = 'ended'; doc.endedAt = new Date().toISOString(); doc.endedBy = email; doc.endReason = str_(obj.reason, 300);
+    }
+    var json = JSON.stringify(doc); // starts with "{", so a spreadsheet never reads it as a formula
+    if (json.length > 48000) { failure = 'invalid'; return; }
+    var vals = [id, json, email, new Date()];
+    if (row === -1) sh.appendRow(vals); else sh.getRange(row, 1, 1, vals.length).setValues([vals]);
+    summary = contractSummary_(doc);
+    summary.hash = doc.hash || '';
+  });
+  return failure ? { ok: false, error: failure } : { ok: true, contract: summary };
+}
+
+function contracts_() {
+  var rows = contractsSheet_().getDataRange().getValues(), out = {};
+  rows.shift();
+  rows.forEach(function (r) {
+    var d = null;
+    try { d = JSON.parse(String(r[1])); } catch (e) { d = null; }
+    if (d && typeof d === 'object') out[String(r[0])] = contractSummary_(d);
   });
   return out;
 }

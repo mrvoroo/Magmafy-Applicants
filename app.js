@@ -16,7 +16,7 @@
   var SESSION_KEY = 'mg_session'; // session token lives in this tab only, never in localStorage
 
   var state = {
-    rows: [], evals: {}, dups: {}, reviews: {}, interviews: {}, source: 'none', // 'server' | 'demo' | 'file' | 'none'
+    rows: [], evals: {}, dups: {}, reviews: {}, interviews: {}, contracts: {}, source: 'none', // 'server' | 'demo' | 'file' | 'none'
     sortKey: 'score', sortDir: -1, band: '', selected: null,
     open: null, me: '', used: null, cap: null, msgs: {}, sender: ''
   };
@@ -104,7 +104,7 @@
   }
 
   function clearData() {
-    state.rows = []; state.evals = {}; state.dups = {}; state.reviews = {}; state.interviews = {}; state.source = 'none';
+    state.rows = []; state.evals = {}; state.dups = {}; state.reviews = {}; state.interviews = {}; state.contracts = {}; state.source = 'none';
     state.selected = null; state.me = ''; state.open = null; state.used = null; state.cap = null; state.msgs = {}; state.sender = '';
     if (window.MagmafyComms) window.MagmafyComms.reset();
     closeDrawer(true);
@@ -171,6 +171,7 @@
       state.me = j.me || '';
       state.reviews = j.reviews || {};
       state.interviews = j.interviews || {};
+      state.contracts = j.contracts || {};
       state.open = j.open; state.used = j.used; state.cap = j.cap; state.msgs = j.msgs || {}; state.sender = j.sender || '';
       setMe(state.me);
       banner(keep ? 'ok' : '', keep);
@@ -370,7 +371,7 @@
       var e = state.evals[r.id];
       var tr = h('tr', { tabindex: '0', 'aria-selected': state.selected === r.id ? 'true' : 'false', onclick: function () { openDrawer(r.id); }, onkeydown: function (ev) { if (ev.key === 'Enter') openDrawer(r.id); } },
         h('td', { class: 'rank', text: i + 1 }),
-        h('td', null, h('b', { text: r.name || '(بدون اسم)' }), h('div', { class: 'small', text: r.country || '' }), state.dups[r.id] ? h('span', { class: 'pill warn', text: 'نص مكرر' }) : null, (function () { var iv = interviewInfo(r.id); return iv && iv.started ? h('span', { class: 'pill ' + (iv.flags ? 'miss' : 'neutral'), text: 'مقابلة ' + iv.score }) : null; })()),
+        h('td', null, h('b', { text: r.name || '(بدون اسم)' }), h('div', { class: 'small', text: r.country || '' }), state.dups[r.id] ? h('span', { class: 'pill warn', text: 'نص مكرر' }) : null, (function () { var iv = interviewInfo(r.id); return iv && iv.started ? h('span', { class: 'pill ' + (iv.flags ? 'miss' : 'neutral'), text: 'مقابلة ' + iv.score }) : null; })(), (function () { var ct = state.contracts[r.id]; return ct && (ct.status === 'signed' || ct.status === 'ended') ? h('span', { class: 'pill ' + (ct.status === 'signed' ? 'ok' : 'miss'), text: ct.status === 'signed' ? 'عقد موقّع' : 'عقد منتهي' }) : null; })()),
         h('td', null, h('div', { class: 'score ' + e.band.key }, h('b', { text: e.score }), h('div', { class: 'meter' }, h('i', { style: 'width:' + e.score + '%' })))),
         h('td', { text: r.years || '-' }),
         h('td', { class: 'ltr', text: S.parseSpendUSD(r.spend) ? '$' + S.parseSpendUSD(r.spend).toLocaleString('en-US') : '-' }),
@@ -411,6 +412,22 @@
       id: id, name: r.name, rate: r.rate, data: interviewData(id), live: live,
       save: function (doc) { return saveInterviewDoc(id, doc); },
       onChange: function (doc) { state.interviews[id] = Object.assign({}, state.interviews[id], { data: doc }); },
+      onClose: function () { render(); }
+    });
+  }
+
+  // ---------- contract ----------
+  function contractInfo(id) { return state.contracts[id] || null; }
+  function openContract(id) {
+    var r = state.rows.filter(function (x) { return x.id === id; })[0];
+    if (!r || !window.MagmafyContract) return;
+    var iv = interviewData(id);
+    window.MagmafyContract.open({
+      id: id, live: state.source === 'server', company: CFG.company || {}, summary: contractInfo(id), fee: iv && iv.fee,
+      applicant: { name: r.name, phone: r.phone, email: r.email, country: r.country },
+      load: function () { return api('getContract', { token: ss.get(), id: id }); },
+      save: function (op, doc) { return api('saveContract', { token: ss.get(), id: id, op: op, data: JSON.stringify(doc) }); },
+      onChange: function (sum) { if (sum) state.contracts[id] = sum; },
       onClose: function () { render(); }
     });
   }
@@ -508,6 +525,16 @@
     d.appendChild(h('button', { class: 'btn primary', type: 'button', onclick: function () { openInterview(id); }, text: iv && iv.started ? 'كمّل المقابلة' : 'ابدأ المقابلة' }));
     if (!live) d.appendChild(h('p', { class: 'small', text: 'في البيانات التجريبية المقابلة مش بتتحفظ.' }));
     if (state.interviews[id] && state.interviews[id].by) d.appendChild(h('p', { class: 'small', text: 'آخر حفظ للمقابلة: ' + state.interviews[id].by }));
+
+    d.appendChild(h('h3', { text: 'العقد' }));
+    var ct = contractInfo(id), ctBox = h('div', { class: 'iv-sum' });
+    if (ct && ct.status && ct.status !== 'none') {
+      ctBox.appendChild(h('span', { class: 'pill ' + (ct.status === 'signed' ? 'ok' : ct.status === 'ended' ? 'miss' : 'warn'), text: window.MagmafyContract.STATUS[ct.status] || '' }));
+      ctBox.appendChild(h('span', { class: 'small', text: [ct.no, ct.fee ? ct.fee + ' ' + ct.cur + ' / عميل' : '', ct.signedAt ? 'وُقّع ' + String(ct.signedAt).slice(0, 10) : ''].filter(Boolean).join(' · ') }));
+    } else ctBox.appendChild(h('span', { class: 'small', text: 'لسه مفيش عقد.' }));
+    d.appendChild(ctBox);
+    d.appendChild(h('button', { class: 'btn primary', type: 'button', onclick: function () { openContract(id); }, text: ct && (ct.status === 'signed' || ct.status === 'ended') ? 'عرض العقد' : ct && ct.status === 'draft' ? 'كمّل العقد' : 'إنشاء العقد' }));
+    if (!live) d.appendChild(h('p', { class: 'small', text: 'في البيانات التجريبية العقد للمعاينة فقط.' }));
 
     d.appendChild(h('h3', { text: 'إجاباته كاملة' }));
     var qs = [['platforms', 'المنصات اللي أدارها بميزانية حقيقية'], ['spend', 'أعلى ميزانية شهرية أدارها'], ['niche', 'خبرته في الأثاث والديكور والمتاجر'], ['gulf', 'خبرته مع السوق السعودي والخليجي'], ['result', 'أفضل نتيجة حققها لعميل'], ['tracking', 'إزاي بيتأكد إن التتبع سليم'], ['drop', 'أول ٣ حاجات بيفحصها لما الأداء يهبط'], ['more', 'أي شيء تاني حب يقوله']];

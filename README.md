@@ -7,6 +7,7 @@ script, not by this page.**
 ## Files
 - `index.html`, `app.js`, `config.js`: the dashboard (login, table, filters, detail drawer, close/open applications)
 - `interview.js`, `interview.css`: the interview checklist (opened from the applicant drawer, button "ابدأ المقابلة"): questions, 0-5 ratings with weights, always-visible red flags, timer, trial task. Saved per applicant in the `Interviews` sheet via the `saveInterview` action.
+- `contract.js`, `contract.css`: the contractor agreement (button "إنشاء العقد" in the drawer): Magmafy-branded paper, 13 clauses, drawn signature, Magmafy seal after approval, print to PDF. Saved per applicant in the `Contracts` sheet via `saveContract` / `getContract`.
 - `scoring.js`: scoring rules (pure functions, easy to tune). `demo-data.js`: fake applicants
 - `apps-script/Code.gs`: the backend. `apps-script/test.js` and `e2e.js`: offline security and UI tests
 
@@ -55,3 +56,12 @@ read the data directly. Keep that account on 2-step verification, do not share t
 - Set the script property `NOTIFY_EMAIL` to get a "new applicant" email. At most one email per 10 minutes: applicants that
   arrive in between are grouped into one digest (sent on the next applicant or when the dashboard is opened). When the batch
   completes a notice is sent right away. Notices never include phone numbers or emails and are skipped if the mail quota is low.
+
+## Contract
+Same `Code.gs` update as above (new `Contracts` tab, `saveContract` and `getContract` actions). After pasting it, run `setup` once and deploy a new version.
+
+- One contract per applicant. Draft autosaves; signing freezes it on the server (a signed contract can only be ended, never edited).
+- The server sets the signing time, the approving admin and a SHA-256 fingerprint of the terms, parties and signature. The client cannot choose them.
+- The signature is stored as vector strokes (small JSON), not an image.
+- Company defaults (entity, representative, title) are in `config.js` under `company`.
+- The wording is a template. Have a lawyer review it before real use (governing law, non-solicitation, liability cap).
